@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual Environments
+venv/
+.env/
+
+# Temp render files & caches
+temp_clips/
+temp_render/
+user_data/
+
+# Archives
+archive/
+
+# Large media outputs (optional: keep or ignore)
+projects/*/*.mp4

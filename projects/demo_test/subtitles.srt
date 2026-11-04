@@ -1,0 +1,12 @@
+1
+00:00:00,000 --> 00:00:05,759
+When choosing an electric two-wheeler, the biggest decision starts inside the battery pack.
+
+2
+00:00:05,759 --> 00:00:12,500
+In this showdown, it comes down to a classic trade-off: rugged durability against energy density.
+
+3
+00:00:12,500 --> 00:00:19,000
+Both chemistries power modern mobility, but create two entirely different riding experiences.
+
