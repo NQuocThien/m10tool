@@ -21,15 +21,34 @@ def load_script(script_path):
             
     return clean_lines
 
-async def _synthesize_line(text, voice, out_mp3):
-    communicate = edge_tts.Communicate(text, voice, rate="+0%", pitch="+0Hz")
-    audio_chunk = bytearray()
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_chunk.extend(chunk["data"])
+async def _synthesize_line(idx, total, text, voice, out_mp3, max_retries=8):
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            communicate = edge_tts.Communicate(text, voice)
+            audio_chunk = bytearray()
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    audio_chunk.extend(chunk["data"])
             
-    with open(out_mp3, "wb") as f_out:
-        f_out.write(audio_chunk)
+            if len(audio_chunk) > 0:
+                with open(out_mp3, "wb") as f_out:
+                    f_out.write(audio_chunk)
+                print(f"  [{idx:02d}/{total}] Generated {os.path.basename(out_mp3)}", flush=True)
+                await asyncio.sleep(0.5)
+                return
+            else:
+                raise edge_tts.exceptions.NoAudioReceived("Received empty audio stream")
+        except Exception as e:
+            last_err = e
+            if attempt < max_retries:
+                await asyncio.sleep(2.0 * attempt)
+            else:
+                raise last_err
+
+async def _batch_generate(items, total, voice):
+    for idx, text, out_mp3 in items:
+        await _synthesize_line(idx, total, text, voice, out_mp3)
 
 def generate_audio(script_path, audio_dir, voice=DEFAULT_VOICE, force=False):
     """
@@ -40,32 +59,33 @@ def generate_audio(script_path, audio_dir, voice=DEFAULT_VOICE, force=False):
     lines = load_script(script_path)
     
     results = []
-    full_audio = bytearray()
+    pending_items = []
     
     print(f"-> Generating voiceover ({len(lines)} lines) using voice: {voice}")
     
     for idx, text in enumerate(lines, 1):
         out_mp3 = os.path.join(audio_dir, f"{idx:02d}_voice.mp3")
-        
-        # Check if already generated
         needs_gen = force or not os.path.exists(out_mp3) or os.path.getsize(out_mp3) == 0
         if needs_gen:
-            asyncio.run(_synthesize_line(text, voice, out_mp3))
-            print(f"  [{idx:02d}/{len(lines)}] Generated {os.path.basename(out_mp3)}")
+            pending_items.append((idx, text, out_mp3))
         else:
             print(f"  [{idx:02d}/{len(lines)}] Cached {os.path.basename(out_mp3)}")
-            
+
+    if pending_items:
+        asyncio.run(_batch_generate(pending_items, len(lines), voice))
+        print(f"  [OK] Generated {len(pending_items)} audio files successfully.")
+
+    full_audio = bytearray()
+    for idx, text in enumerate(lines, 1):
+        out_mp3 = os.path.join(audio_dir, f"{idx:02d}_voice.mp3")
         with open(out_mp3, "rb") as f_in:
-            data = f_in.read()
-            full_audio.extend(data)
-            
+            full_audio.extend(f_in.read())
         results.append({
             "index": idx,
             "text": text,
             "audio_path": out_mp3
         })
         
-    # Save combined master audio
     master_mp3 = os.path.join(audio_dir, "full_voiceover.mp3")
     with open(master_mp3, "wb") as f_out:
         f_out.write(full_audio)

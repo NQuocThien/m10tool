@@ -1,0 +1,21 @@
+# ========================================================
+# PROMPTS NHẬN DIỆN THƯƠNG HIỆU - VẮT CHANH CÔNG NGHỆ (VI)
+# ========================================================
+
+# [1] AVATAR: Biểu tượng Lemon Power + Sóng Wi-Fi (Tối giản phong cách Orange Tech - Tỉ lệ 1:1)
+Minimalist 2D flat vector logo for a tech channel, a stylized circular lemon contour resembling an open power button loop in bold warm lemon yellow and terracotta orange, with green gradient Wi-Fi signal waves radiating from the top like a sprout leaf, clean geometric vector lines, modern negative space, crisp white background, corporate tech branding style, bold thick stroke, centered composition, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no 3d, realistic, photorealistic, shadow, complex, logo, watermark, gemini, google, star, sparkle, text --ar 1:1
+
+# [2] AVATAR: Biểu tượng Lemon ôm chữ "LEMON TECH" (Tỉ lệ 1:1)
+Modern 2D vector logo inspired by creative fruit tech branding, an open circular lemon shape in vibrant yellow-orange bold outline, the opening on the right cradling the text "LEMON TECH" in clean bold modern sans-serif typography, from the top stem radiates a three-arc lime green Wi-Fi signal, solid clean white background, sleek minimalist tech company logo, sharp vector graphics, flat design, no watermark, no google logo, no gemini logo, no star icon --no 3d, realistic, photorealistic, gradients, shadow, logo, watermark, gemini, google, star --ar 1:1
+
+# [3] AVATAR: Mascot Quả Chanh Chibi Đeo Kính (Tỉ lệ 1:1)
+Cute and clever cartoon lemon character mascot, round minimalist vector illustration, wearing round nerdy glasses, smiling warmly, soft pastel lemon yellow body, clean bold warm charcoal outlines, terracotta orange cheek accents, solid warm cream background, friendly modern tech mascot logo, Japanese kawaii meets modern editorial style, centered, simple shapes, no watermark, no google logo, no gemini logo, no star icon --no 3d, realistic, photorealistic, complex, dark background, logo, watermark, gemini, google, star, sparkle, text --ar 1:1
+
+# [4] BANNER: Nền sạch phong cách Cartoon Editorial (Tỉ lệ 16:9 - Chừa trống giữa để chèn chữ)
+Ultra-clean 2D cute cartoon vector YouTube banner background, soft warm cream and beige canvas, left side features a cute smiling lemon character tinkering with friendly cartoon tech gadgets, right side features playful rounded cartoon battery and tiny robot doodles in terracotta and pastel yellow, spacious clean empty center for text, whimsical modern editorial illustration, charming and friendly tech vibe, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no text, letters, dark background, realistic, logo, watermark, gemini, google, star, sparkle --ar 16:9
+
+# [5] BANNER: Tên kênh "VAT CHANH CONG NGHE" + Slogan "Vat can ly thuyet, lay lai gia tri" (Tỉ lệ 16:9)
+Charming 2D cartoon vector YouTube banner, center features bold friendly typography "VAT CHANH CONG NGHE" with subtitle "Vat can ly thuyet, lay lai gia tri", flanked by adorable cartoon lemon mascots interacting with cute stylized tech devices, warm pastel yellow and terracotta orange color palette, smooth warm cream paper texture background, clean rounded line art, delightful and approachable tech explainer branding, no google logo, no gemini logo, no star icon, no watermark --no dark background, realistic, 3d, gemini, google, star, watermark, misspelled --ar 16:9
+
+# [6] INTRO (TITLE CARD / FRAME): Khung hình mở đầu kênh Việt (Tỉ lệ 16:9 - Chuẩn 2.5s - 3s)
+Charming 2D minimalist motion graphics title card, warm cream background (#FAF7F2), center features a playful stylized lemon power icon glowing warmly, smooth charcoal outline, bold friendly typography "VAT CHANH CONG NGHE" in charcoal above subtitle "Vat sach thong so, giu lai cach dung" in terracotta orange, flanked by delicate minimalist circuit waves, high resolution 2D vector, clean editorial tech branding, no watermark, no google logo, no gemini logo, no star icon --no dark background, 3d, realistic, watermark, gemini, google, star --ar 16:9

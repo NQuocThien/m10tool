@@ -1,19 +1,35 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.egg-info/
+.installed.cfg
+dist/
+build/
 
 # Virtual Environments
 venv/
+.venv/
+env/
+.env
 .env/
 
-# Temp render files & caches
-temp_clips/
-temp_render/
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Local App & Browser State
+app_settings.json
 user_data/
 
-# Archives
+# Temp render & Archive
+temp_clips/
+temp_render/
+**/temp_render/
 archive/
 
-# Large media outputs (optional: keep or ignore)
-projects/*/*.mp4
+# Projects
+projects/

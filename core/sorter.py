@@ -1,7 +1,12 @@
 import os
 import re
 
-VALID_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
+VALID_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+
+def is_video_file(path):
+    return os.path.splitext(path)[1].lower() in VIDEO_EXTENSIONS
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]

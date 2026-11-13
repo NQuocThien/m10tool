@@ -1,0 +1,42 @@
+# Quy Chuẩn Prompt Kênh Tiếng Việt: Vắt Chanh Công Nghệ
+
+## 1. Nhận Diện Thương Hiệu (Brand DNA)
+- **Tên kênh**: Vắt Chanh Công Nghệ
+- **Slogan**: *Vắt sạch thông số, giữ lại cách dùng*
+- **Phong cách chủ đạo**: 2D Flat Vector Editorial Tech, nét vẽ bo tròn thân thiện, ấm áp, trực quan dễ hiểu cho người xem Việt Nam.
+
+## 2. Bảng Màu Bắt Buộc (Color Palette)
+- **Màu nền (Background)**: Vàng kem ấm (`warm cream background (#FAF7F2)`). **TUYỆT ĐỐI KHÔNG** dùng nền xanh đen hay nền tối.
+- **Màu chủ đạo (Primary)**: Vàng chanh ấm (`golden lemon yellow #F4C430`) kết hợp Cam đất (`terracotta orange #D35400`).
+- **Màu điểm nhấn (Accent)**: Xanh lá mầm (`fresh lime green #7CB342`) đại diện cho sự bền bỉ, an toàn, sinh thái và sóng công nghệ.
+- **Đường nét (Outlines)**: Nâu than đậm (`clean rounded deep charcoal line art #1C1917`), nét dày dặn, bo góc mềm mại.
+
+## 3. Liên Kết Phong Cách Logo & Banner Kênh
+Khi viết prompt cho các cảnh giải thích hoặc so sánh, lồng ghép tinh tế các yếu tố nhận diện từ Logo & Banner kênh:
+- **Biểu tượng nút nguồn quả chanh**: `stylized lemon power emblem` hoặc `subtle lemon tech badge detail`.
+- **Lá mầm / Sóng công nghệ**: `sprout leaf accent` hoặc `lime green Wi-Fi wave motif`.
+- **Mascot (Cảnh Hook / Mở đầu / CTA cuối video)**: `tiny cute nerdy lemon mascot wearing round glasses`.
+- **Bố cục**: Bento card bo góc nhẹ nhàng hoặc mặt cắt 2D trực quan (`modern editorial tech infographic`).
+
+## 4. Cấu Trúc Prompt Chuẩn Kênh Việt
+
+### Công thức ghép Prompt:
+```text
+[Mô tả hành động/vật thể chính trực quan] + on a warm cream background (#FAF7F2), [Chi tiết màu sắc: lime green / golden lemon / terracotta orange] + [Chi tiết liên kết thương hiệu nhẹ nếu phù hợp] + clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+```
+
+### Boilerplate Video Ngang (16:9 - YouTube):
+```text
+on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+```
+
+### Boilerplate Video Dọc (9:16 - Shorts/TikTok/Reels):
+```text
+on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 9:16
+```
+
+## 5. Ví Dụ Định Dạng Trong `prompts_vi.txt`
+```text
+# Cảnh 01: [Tóm tắt ngắn gọn nội dung câu thoại số 01]
+Top-down 2D flat vector comparison of two electric scooter battery packs side by side on a warm cream background (#FAF7F2), left LFP pack framed in sturdy lime green and charcoal outline, right NCM pack framed in energetic golden lemon and terracotta orange outline, stylized lemon power emblem in center as comparison divider, clean rounded line art, modern editorial tech infographic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+```
