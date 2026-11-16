@@ -428,9 +428,12 @@ def create_short_overlay(
         width=4,
     )
 
-    # Badge tập
-    font_badge = _load_font(24, bold=True)
+    # Badge tập (hỗ trợ hiển thị Chủ đề chính + Tập, tự co chữ nếu dài)
+    font_badge = _load_font(23, bold=True)
     b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
+    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 80):
+        font_badge = _load_font(19, bold=True)
+        b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
     b_w = (b_bbox[2] - b_bbox[0]) + 44
     b_h = 46
     b_x = (W - b_w) // 2
@@ -443,7 +446,8 @@ def create_short_overlay(
         width=2,
     )
     badge_fg = charcoal if accent_hex_clean.upper() == "F4C430" else (255, 255, 255, 255)
-    draw.text((b_x + 22, b_y + 9), badge_text, font=font_badge, fill=badge_fg)
+    text_offset_y = (b_h - (b_bbox[3] - b_bbox[1])) // 2 - b_bbox[1]
+    draw.text((b_x + 22, b_y + text_offset_y), badge_text, font=font_badge, fill=badge_fg)
 
     # Title Line 1
     font_t1 = _load_font(50, bold=True)
@@ -627,9 +631,12 @@ def create_short_overlay_en(
         width=3,
     )
 
-    # Episode Badge
-    font_badge = _load_font(23, bold=True)
+    # Episode Badge (hỗ trợ hiển thị Main Topic + Episode, tự co chữ nếu dài)
+    font_badge = _load_font(22, bold=True)
     b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
+    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 80):
+        font_badge = _load_font(19, bold=True)
+        b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
     b_w = (b_bbox[2] - b_bbox[0]) + 44
     b_h = 46
     b_x = (W - b_w) // 2
@@ -641,7 +648,8 @@ def create_short_overlay_en(
         outline=bg_navy,
         width=2,
     )
-    draw.text((b_x + 22, b_y + 10), badge_text, font=font_badge, fill=bg_navy)
+    text_offset_y = (b_h - (b_bbox[3] - b_bbox[1])) // 2 - b_bbox[1]
+    draw.text((b_x + 22, b_y + text_offset_y), badge_text, font=font_badge, fill=bg_navy)
 
     # Title Line 1
     font_t1 = _load_font(46, bold=True)

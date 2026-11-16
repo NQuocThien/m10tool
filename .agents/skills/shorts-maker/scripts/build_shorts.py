@@ -112,6 +112,22 @@ def load_and_validate_configs(config_path, total_scenes):
     return configs
 
 
+def format_overlay_badge(cfg, ep_idx, total_eps, lang="vi"):
+    """Format badge text so viewer immediately sees Main Topic + Episode progress."""
+    raw_badge = cfg["badge"].strip()
+    main_topic = cfg.get("main_topic", "").strip()
+    if main_topic and main_topic.upper() not in raw_badge.upper():
+        return f"{main_topic.upper()} • {raw_badge}"
+    return raw_badge
+
+
+def format_step_label(ep_idx, total_eps, scene_order_idx, total_scenes_in_ep, lang="vi"):
+    """Format subtitle card header right label with Episode + Scene progress."""
+    if lang == "en":
+        return f"Part {ep_idx}/{total_eps} • Scene {scene_order_idx}/{total_scenes_in_ep}"
+    return f"Tập {ep_idx}/{total_eps} • Cảnh {scene_order_idx}/{total_scenes_in_ep}"
+
+
 def build_shorts(proj_name, lang, paths, configs):
     """Render vertical 9:16 Short videos for all configured episodes."""
     shorts_out_dir = paths["shorts_out_dir"]
@@ -121,11 +137,13 @@ def build_shorts(proj_name, lang, paths, configs):
     all_lines = load_script(paths["script_path"])
     all_media = get_sorted_images(paths["media_dir"])
     generated = []
+    total_eps = len(configs)
 
-    for cfg in configs:
+    for ep_idx, cfg in enumerate(configs, 1):
         short_id = cfg["id"]
         scene_nums = cfg["scenes"]
-        print(f"\n=== BUILDING SHORT [{lang.upper()}]: {short_id} | scenes={scene_nums} ===")
+        overlay_badge = format_overlay_badge(cfg, ep_idx, total_eps, lang)
+        print(f"\n=== BUILDING SHORT [{lang.upper()}]: {short_id} ({overlay_badge}) | scenes={scene_nums} ===")
 
         temp_dir = os.path.join(shorts_out_dir, f"_temp_{short_id}")
         os.makedirs(temp_dir, exist_ok=True)
@@ -150,7 +168,7 @@ def build_shorts(proj_name, lang, paths, configs):
             txt_out = os.path.join(shorts_out_dir, f"{short_id}_script.txt")
             scene_word = "Scene" if lang == "en" else "Cảnh"
             with open(txt_out, "w", encoding="utf-8") as f_txt:
-                f_txt.write(f"# {cfg['badge']} - {cfg['title_line1']}: {cfg['title_line2']}\n")
+                f_txt.write(f"# {overlay_badge} - {cfg['title_line1']}: {cfg['title_line2']}\n")
                 for item in enriched:
                     f_txt.write(f"{item['index']:02d} ({scene_word} {item['scene_num']:02d}). {item['text']}\n")
 
@@ -163,11 +181,11 @@ def build_shorts(proj_name, lang, paths, configs):
                     overlay_png = os.path.join(temp_dir, f"overlay_{order_idx:02d}.png")
                     box_rect = overlay_fn(
                         overlay_png,
-                        cfg["badge"],
+                        overlay_badge,
                         cfg["title_line1"],
                         cfg["title_line2"],
                         subtitle_text=item["text"],
-                        step_label=f"{scene_word} {order_idx}/{total_sc}",
+                        step_label=format_step_label(ep_idx, total_eps, order_idx, total_sc, lang),
                         accent_hex=cfg["accent_color"],
                     )
                     fut = executor.submit(

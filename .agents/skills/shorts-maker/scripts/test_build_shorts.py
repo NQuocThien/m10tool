@@ -22,7 +22,8 @@ class TestBuildShorts(unittest.TestCase):
     def test_validate_configs_valid_and_out_of_range(self):
         sample = [{
             "id": "short_01_test",
-            "badge": "EP 1",
+            "main_topic": "PIN XE ĐIỆN: CÔNG BỐ vs THỰC TẾ",
+            "badge": "TẬP 1/4 • BẪY PHÒNG LAB",
             "title_line1": "TITLE",
             "title_line2": "SUBTITLE",
             "accent_color": "#D35400",
@@ -42,6 +43,14 @@ class TestBuildShorts(unittest.TestCase):
         try:
             loaded = bs.load_and_validate_configs(tmp_path, total_scenes=30)
             self.assertEqual(len(loaded), 1)
+            self.assertEqual(
+                bs.format_overlay_badge(loaded[0], 1, 4, "vi"),
+                "PIN XE ĐIỆN: CÔNG BỐ VS THỰC TẾ • TẬP 1/4 • BẪY PHÒNG LAB",
+            )
+            self.assertEqual(
+                bs.format_step_label(2, 4, 3, 7, "vi"),
+                "Tập 2/4 • Cảnh 3/7",
+            )
             with self.assertRaises(ValueError):
                 bs.load_and_validate_configs(tmp_path, total_scenes=2)
         finally:
