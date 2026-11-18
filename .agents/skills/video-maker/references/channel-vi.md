@@ -16,27 +16,33 @@ Khi viết prompt cho các cảnh giải thích hoặc so sánh, lồng ghép ti
 - **Biểu tượng nút nguồn quả chanh**: `stylized lemon power emblem` hoặc `subtle lemon tech badge detail`.
 - **Lá mầm / Sóng công nghệ**: `sprout leaf accent` hoặc `lime green Wi-Fi wave motif`.
 - **Mascot (Cảnh Hook / Mở đầu / CTA cuối video)**: `tiny cute nerdy lemon mascot wearing round glasses`.
+- **Từ khóa bắt buộc cho Xe Máy Điện (Tránh vẽ nhầm xe trượt Kick Scooter)**: Luôn dùng `sit-down Vespa-style electric moped motorbike with padded saddle seat and front leg shield` (hoặc `electric motorbike`), kèm hậu tố cấm `no kick scooter, no stand-up scooter` và `--no kick scooter, stand-up scooter, push scooter`. **TUYỆT ĐỐI KHÔNG** viết trống không là `electric scooter` (AI phương Tây mặc định hiểu là xe trượt đứng Xiaomi).
 - **Bố cục**: Bento card bo góc nhẹ nhàng hoặc mặt cắt 2D trực quan (`modern editorial tech infographic`).
 
 ## 4. Cấu Trúc Prompt Chuẩn Kênh Việt
 
+### Hậu tố Negative bắt buộc (Gắn cuối MỌI câu prompt `[VIDEO]` và `[IMG]`):
+```text
+Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo.
+```
+
 ### Công thức ghép Prompt:
 ```text
-[Mô tả hành động/vật thể chính trực quan] + on a warm cream background (#FAF7F2), [Chi tiết màu sắc: lime green / golden lemon / terracotta orange] + [Chi tiết liên kết thương hiệu nhẹ nếu phù hợp] + clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+[Mô tả hành động/vật thể chính trực quan] + on a warm cream background (#FAF7F2), [Chi tiết màu sắc: lime green / golden lemon / terracotta orange] + [Chi tiết liên kết thương hiệu nhẹ nếu phù hợp] + clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
 ```
 
 ### Boilerplate Video Ngang (16:9 - YouTube):
 ```text
-on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
 ```
 
 ### Boilerplate Video Dọc (9:16 - Shorts/TikTok/Reels):
 ```text
-on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 9:16
+on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 9:16
 ```
 
-## 5. Ví Dụ Định Dạng Trong `prompts_vi.txt`
+## 5. Ví Dụ Định Dạng Trong `prompts_vi_video.txt` / `prompts_vi_img.txt`
 ```text
-# Cảnh 01: [Tóm tắt ngắn gọn nội dung câu thoại số 01]
-Top-down 2D flat vector comparison of two electric scooter battery packs side by side on a warm cream background (#FAF7F2), left LFP pack framed in sturdy lime green and charcoal outline, right NCM pack framed in energetic golden lemon and terracotta orange outline, stylized lemon power emblem in center as comparison divider, clean rounded line art, modern editorial tech infographic, no text, no watermark, no google logo, no gemini logo, no star icon, no sparkles --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+# Cảnh 01 [VIDEO]: [Tóm tắt ngắn gọn nội dung câu thoại số 01]
+Top-down 2D flat vector comparison of two electric motorbike battery packs side by side on a warm cream background (#FAF7F2), left LFP pack framed in sturdy lime green and charcoal outline, right NCM pack framed in energetic golden lemon and terracotta orange outline, stylized lemon power emblem in center as comparison divider, clean rounded line art, modern editorial tech infographic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
 ```

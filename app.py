@@ -1,6 +1,10 @@
 import os
+import re
 import sys
 import json
+import shutil
+import hashlib
+import winsound
 import threading
 import subprocess
 import tkinter as tk
@@ -14,7 +18,10 @@ if sys.stdout.encoding != 'utf-8':
     except Exception:
         pass
 
-from core.config import BASE_DIR, PROJECTS_DIR, VOICES_VI, VOICES_EN
+from core.config import BASE_DIR, PROJECTS_DIR, RESOURCES_DIR, FFMPEG_PATH, DEFAULT_BGM_VOLUME, VOICES_VI, VOICES_EN
+from core.sorter import sort_media_by_prompts
+from core.renderer import get_bgm_path
+from core.tts import load_script, synthesize_preview
 from make_video import get_media_dir, get_script_path
 
 SETTINGS_FILE = os.path.join(BASE_DIR, "app_settings.json")
@@ -74,6 +81,7 @@ class SqueezingTechApp:
         self.root.configure(bg="#0F172A")
 
         self.bot_proc = None
+        self.render_proc = None
         self.settings = load_settings()
         self.setup_styles()
         self.create_widgets()
@@ -188,12 +196,38 @@ class SqueezingTechApp:
         v_frame.pack(fill="x", pady=6)
 
         ttk.Label(v_frame, text="Giọng Đọc AI (TTS):", style="Card.TLabel", width=18).pack(side="left")
-        self.cbo_voice = ttk.Combobox(v_frame, state="readonly", width=42, font=("Segoe UI", 9))
+        self.cbo_voice = ttk.Combobox(v_frame, state="readonly", width=38, font=("Segoe UI", 9))
         self.cbo_voice.pack(side="left", padx=4)
+
+        self.btn_preview_voice = ttk.Button(v_frame, text="🔊 Nghe thử", style="Secondary.TButton", command=self.preview_voice_thread)
+        self.btn_preview_voice.pack(side="left", padx=4)
 
         self.chk_force = tk.BooleanVar(value=False)
         chk = tk.Checkbutton(v_frame, text="Ép tạo lại Audio", variable=self.chk_force, bg="#1E293B", fg="#94A3B8", selectcolor="#0F172A", activebackground="#1E293B", activeforeground="#FFFFFF")
-        chk.pack(side="left", padx=8)
+        chk.pack(side="left", padx=6)
+
+        self.chk_25d = tk.BooleanVar(value=False)
+        chk_25d_btn = tk.Checkbutton(v_frame, text="✨ Tách nền 2.5D", variable=self.chk_25d, bg="#1E293B", fg="#94A3B8", selectcolor="#0F172A", activebackground="#1E293B", activeforeground="#38BDF8")
+        chk_25d_btn.pack(side="left", padx=4)
+
+        # 3b. BGM Preview & Selection
+        bgm_frame = ttk.Frame(card, style="Card.TFrame")
+        bgm_frame.pack(fill="x", pady=6)
+
+        ttk.Label(bgm_frame, text="Nhạc Nền (BGM):", style="Card.TLabel", width=18).pack(side="left")
+        self.lbl_bgm_info = ttk.Label(bgm_frame, text="Đang kiểm tra...", style="CardMuted.TLabel", width=28)
+        self.lbl_bgm_info.pack(side="left", padx=4)
+
+        self.btn_preview_bgm = ttk.Button(bgm_frame, text="🎵 Nghe Nhạc", style="Secondary.TButton", command=self.preview_bgm_thread)
+        self.btn_preview_bgm.pack(side="left", padx=3)
+
+        self.btn_preview_mix = ttk.Button(bgm_frame, text="🎧 Giọng + Nhạc", style="Secondary.TButton", command=self.preview_mix_thread)
+        self.btn_preview_mix.pack(side="left", padx=3)
+
+        self.btn_stop_audio = ttk.Button(bgm_frame, text="⏹ Dừng", style="Secondary.TButton", command=self.stop_audio_preview)
+        self.btn_stop_audio.pack(side="left", padx=3)
+
+        ttk.Button(bgm_frame, text="📂 Đổi Nhạc...", style="Secondary.TButton", command=self.change_bgm_file).pack(side="left", padx=3)
 
         # 4. Action Buttons
         act_frame = ttk.Frame(card, style="Card.TFrame")
@@ -205,8 +239,30 @@ class SqueezingTechApp:
         self.btn_open_script = ttk.Button(act_frame, text="📝 Mở Thoại Tiếng Việt", style="Secondary.TButton", command=self.open_script_file)
         self.btn_open_script.pack(side="left", padx=4)
 
+        self.btn_sort_media = ttk.Button(act_frame, text="🔀 Sort Resource", style="Primary.TButton", command=self.sort_project_resources)
+        self.btn_sort_media.pack(side="left", padx=4)
+
+        self.btn_stop_render = ttk.Button(act_frame, text="⏹ Hủy", style="Danger.TButton", command=self.stop_render_process, state="disabled")
+        self.btn_stop_render.pack(side="right", padx=4)
+
         self.btn_render = ttk.Button(act_frame, text="🚀 BẮT ĐẦU RENDER VIDEO", style="Success.TButton", command=self.start_render_thread)
         self.btn_render.pack(side="right", padx=4)
+
+        # 5. Render Progress Bar
+        prog_frame = ttk.Frame(card, style="Card.TFrame")
+        prog_frame.pack(fill="x", pady=(8, 2))
+
+        self.render_progress = ttk.Progressbar(prog_frame, orient="horizontal", mode="determinate", maximum=100)
+        self.render_progress.pack(side="left", fill="x", expand=True, padx=(4, 10))
+
+        self.lbl_render_progress = ttk.Label(
+            prog_frame,
+            text="Tiến độ: Sẵn sàng (0%)",
+            style="Card.TLabel",
+            foreground="#94A3B8",
+            font=("Segoe UI", 9, "bold"),
+        )
+        self.lbl_render_progress.pack(side="right", padx=4)
 
     def on_lang_changed(self):
         lang = self.var_lang.get()
@@ -226,6 +282,7 @@ class SqueezingTechApp:
             else:
                 self.cbo_voice.current(0)
             self.btn_open_script.config(text="📝 Mở Thoại Tiếng Anh (script_en.txt)")
+        self.update_bgm_info()
         self.on_project_selected()
 
     def build_watermark_tab(self, parent):
@@ -400,6 +457,12 @@ class SqueezingTechApp:
             self.on_project_selected()
 
     def on_close(self):
+        self.stop_audio_preview()
+        if self.render_proc and self.render_proc.poll() is None:
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.render_proc.pid)], capture_output=True)
+            except Exception:
+                pass
         if self.bot_proc and self.bot_proc.poll() is None:
             try:
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.bot_proc.pid)], capture_output=True)
@@ -511,6 +574,325 @@ class SqueezingTechApp:
                 f.write("01. Cau thoai dau tien.\n")
         os.startfile(script_file)
 
+    def sort_project_resources(self):
+        proj_name = self.cbo_project.get()
+        if not proj_name:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn dự án trước!")
+            return
+
+        p_dir = os.path.join(PROJECTS_DIR, proj_name)
+        lang = self.var_lang.get()
+        media_dir = get_media_dir(p_dir, lang=lang)
+        video_prompt_file = os.path.join(p_dir, f"prompts_{lang}_video.txt")
+        img_prompt_file = os.path.join(p_dir, f"prompts_{lang}_img.txt")
+
+        has_vid_p = os.path.exists(video_prompt_file)
+        has_img_p = os.path.exists(img_prompt_file)
+        if not has_vid_p and not has_img_p:
+            messagebox.showwarning(
+                "Thiếu file prompt",
+                f"Không tìm thấy prompts_{lang}_video.txt hoặc prompts_{lang}_img.txt trong {proj_name}!"
+            )
+            return
+
+        if not os.path.exists(media_dir):
+            messagebox.showwarning("Thiếu thư mục", f"Không tìm thấy thư mục media: {media_dir}")
+            return
+
+        self.log(f"--- SORT RESOURCE [{lang.upper()}]: {os.path.basename(media_dir)} ---")
+        try:
+            res = sort_media_by_prompts(
+                media_dir,
+                video_prompt_file=video_prompt_file if has_vid_p else None,
+                img_prompt_file=img_prompt_file if has_img_p else None,
+                sort_by="mtime"
+            )
+        except Exception as e:
+            self.log(f"[LỖI SORT] {e}")
+            messagebox.showerror("Lỗi", str(e))
+            return
+
+        for msg in res["skipped"]:
+            self.log(f"  {msg}")
+        for label, old_name, new_name in res["renamed"]:
+            self.log(f"  [{label}] {old_name} -> {new_name}")
+        for err in res["errors"]:
+            self.log(f"  [CẢNH BÁO] {err}")
+
+        self.on_project_selected()
+
+        summary = f"Đã đổi tên {len(res['renamed'])} file theo thứ tự prompt."
+        if res["errors"]:
+            summary += "\n\nCảnh báo:\n" + "\n".join(res["errors"])
+            messagebox.showwarning("Sort hoàn tất (Có cảnh báo)", summary)
+        else:
+            messagebox.showinfo("Sort hoàn tất", summary)
+
+    # Audio & BGM Preview
+    def update_bgm_info(self):
+        lang = self.var_lang.get()
+        bgm_path = get_bgm_path(lang=lang)
+        if bgm_path:
+            self.lbl_bgm_info.config(text=f"{os.path.basename(bgm_path)} (vol={DEFAULT_BGM_VOLUME})", foreground="#4ADE80")
+        else:
+            self.lbl_bgm_info.config(text=f"Chưa có bgm_{lang}.mp3 / bgm.mp3", foreground="#94A3B8")
+
+    def _get_selected_voice(self):
+        lang = self.var_lang.get()
+        voice_list = VOICES_VI if lang == "vi" else VOICES_EN
+        sel_idx = self.cbo_voice.current()
+        voice_id = voice_list[sel_idx][1] if 0 <= sel_idx < len(voice_list) else voice_list[0][1]
+        voice_label = voice_list[sel_idx][0] if 0 <= sel_idx < len(voice_list) else voice_list[0][0]
+        return lang, voice_id, voice_label
+
+    def _get_preview_sample_text(self, lang):
+        if lang == "en":
+            return "Hello, this is a voice preview for Squeezing Tech."
+        return "Xin chào, đây là giọng đọc thử của kênh Vắt Chanh Công Nghệ."
+
+    def _get_voice_preview_paths(self, lang, voice_id):
+        safe_voice = "".join(c if c.isalnum() or c in "-_" else "_" for c in voice_id)
+        pre_dir = os.path.join(RESOURCES_DIR, "voice_previews")
+        mp3_path = os.path.join(pre_dir, f"{safe_voice}_{lang}.mp3")
+        wav_path = os.path.join(pre_dir, f"{safe_voice}_{lang}.wav")
+        return pre_dir, mp3_path, wav_path
+
+    def _ensure_voice_preview_mp3(self, lang, voice_id, text):
+        pre_dir, mp3_path, _ = self._get_voice_preview_paths(lang, voice_id)
+        os.makedirs(pre_dir, exist_ok=True)
+        synthesize_preview(text, mp3_path, voice=voice_id, lang=lang, force=self.chk_force.get())
+        return mp3_path
+
+    def _convert_to_wav(self, src_path, wav_path, max_sec=None):
+        cmd = [FFMPEG_PATH, "-y"]
+        if max_sec:
+            cmd.extend(["-t", str(max_sec)])
+        cmd.extend(["-i", src_path, "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", wav_path])
+        res = subprocess.run(cmd, capture_output=True)
+        if res.returncode != 0:
+            raise RuntimeError(res.stderr.decode("utf-8", errors="ignore")[-300:])
+        return wav_path
+
+    def _mix_to_wav(self, voice_mp3, bgm_path, wav_path):
+        cmd = [
+            FFMPEG_PATH, "-y",
+            "-i", voice_mp3,
+            "-stream_loop", "-1", "-i", bgm_path,
+            "-filter_complex",
+            f"[1:a]volume={DEFAULT_BGM_VOLUME}[bgm];[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+            "-map", "[aout]",
+            "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le",
+            wav_path,
+        ]
+        res = subprocess.run(cmd, capture_output=True)
+        if res.returncode != 0:
+            raise RuntimeError(res.stderr.decode("utf-8", errors="ignore")[-300:])
+        return wav_path
+
+    def _play_wav(self, wav_path):
+        winsound.PlaySound(None, 0)
+        winsound.PlaySound(wav_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+
+    def stop_audio_preview(self):
+        try:
+            winsound.PlaySound(None, 0)
+        except Exception:
+            pass
+
+    def _set_preview_buttons_state(self, state):
+        self.btn_preview_voice.config(state=state)
+        self.btn_preview_bgm.config(state=state)
+        self.btn_preview_mix.config(state=state)
+
+    def preview_voice_thread(self):
+        lang, voice_id, voice_label = self._get_selected_voice()
+        text = self._get_preview_sample_text(lang)
+        self._set_preview_buttons_state("disabled")
+        self.log(f"🔊 Đang tạo/phát thử giọng: {voice_label}")
+
+        def run():
+            try:
+                _, _, wav_path = self._get_voice_preview_paths(lang, voice_id)
+                if not self.chk_force.get() and os.path.exists(wav_path) and os.path.getsize(wav_path) > 0:
+                    self.root.after(0, self._play_wav, wav_path)
+                    self.root.after(0, self.log, f"  ▶ Phát ngay bản mẫu: {os.path.basename(wav_path)}")
+                    return
+                mp3_path = self._ensure_voice_preview_mp3(lang, voice_id, text)
+                self._convert_to_wav(mp3_path, wav_path)
+                self.root.after(0, self._play_wav, wav_path)
+                self.root.after(0, self.log, f"  ▶ Đang phát giọng thử: \"{text}\"")
+            except Exception as e:
+                self.root.after(0, self.log, f"  [LỖI NGHE THỬ GIỌNG] {e}")
+                self.root.after(0, messagebox.showerror, "Lỗi nghe thử giọng", str(e))
+            finally:
+                self.root.after(0, self._set_preview_buttons_state, "normal")
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def preview_bgm_thread(self):
+        lang = self.var_lang.get()
+        bgm_path = get_bgm_path(lang=lang)
+        if not bgm_path:
+            messagebox.showwarning("Chưa có nhạc nền", f"Chưa tìm thấy resources/bgm_{lang}.mp3 hoặc bgm.mp3.\nBấm 'Đổi Nhạc...' để chọn file nhạc nền.")
+            return
+
+        self._set_preview_buttons_state("disabled")
+        self.log(f"🎵 Đang phát thử nhạc nền (15s đầu): {os.path.basename(bgm_path)}")
+
+        def run():
+            try:
+                cache_dir = os.path.join(BASE_DIR, "user_data", "preview_cache")
+                os.makedirs(cache_dir, exist_ok=True)
+                wav_path = os.path.join(cache_dir, f"bgm_preview_{lang}.wav")
+                self._convert_to_wav(bgm_path, wav_path, max_sec=15)
+                self.root.after(0, self._play_wav, wav_path)
+            except Exception as e:
+                self.root.after(0, self.log, f"  [LỖI NGHE NHẠC] {e}")
+                self.root.after(0, messagebox.showerror, "Lỗi nghe nhạc nền", str(e))
+            finally:
+                self.root.after(0, self._set_preview_buttons_state, "normal")
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def preview_mix_thread(self):
+        lang, voice_id, voice_label = self._get_selected_voice()
+        bgm_path = get_bgm_path(lang=lang)
+        if not bgm_path:
+            messagebox.showwarning("Chưa có nhạc nền", f"Chưa tìm thấy resources/bgm_{lang}.mp3 hoặc bgm.mp3.\nBấm 'Đổi Nhạc...' để chọn file nhạc nền.")
+            return
+
+        text = self._get_preview_sample_text(lang)
+        self._set_preview_buttons_state("disabled")
+        self.log(f"🎧 Đang trộn thử: {voice_label} + {os.path.basename(bgm_path)} (vol={DEFAULT_BGM_VOLUME})")
+
+        def run():
+            try:
+                mp3_path = self._ensure_voice_preview_mp3(lang, voice_id, text)
+                cache_dir = os.path.join(BASE_DIR, "user_data", "preview_cache")
+                wav_path = os.path.join(cache_dir, f"mix_preview_{lang}.wav")
+                self._mix_to_wav(mp3_path, bgm_path, wav_path)
+                self.root.after(0, self._play_wav, wav_path)
+                self.root.after(0, self.log, "  ▶ Đang phát bản trộn Giọng + Nhạc nền...")
+            except Exception as e:
+                self.root.after(0, self.log, f"  [LỖI TRỘN THỬ] {e}")
+                self.root.after(0, messagebox.showerror, "Lỗi nghe thử trộn", str(e))
+            finally:
+                self.root.after(0, self._set_preview_buttons_state, "normal")
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def change_bgm_file(self):
+        path = filedialog.askopenfilename(filetypes=[("Audio files", "*.mp3;*.wav;*.m4a;*.aac;*.ogg")])
+        if not path:
+            return
+        lang = self.var_lang.get()
+        os.makedirs(RESOURCES_DIR, exist_ok=True)
+        dest = os.path.join(RESOURCES_DIR, f"bgm_{lang}.mp3")
+        try:
+            if path.lower().endswith(".mp3"):
+                shutil.copy2(path, dest)
+            else:
+                cmd = [FFMPEG_PATH, "-y", "-i", path, "-c:a", "libmp3lame", "-b:a", "192k", dest]
+                res = subprocess.run(cmd, capture_output=True)
+                if res.returncode != 0:
+                    raise RuntimeError(res.stderr.decode("utf-8", errors="ignore")[-300:])
+            self.update_bgm_info()
+            self.log(f"[OK] Đã cập nhật nhạc nền [{lang.upper()}]: {dest}")
+            messagebox.showinfo("Thành công", f"Đã lưu nhạc nền mới vào:\n{dest}")
+        except Exception as e:
+            self.log(f"[LỖI ĐỔI NHẠC] {e}")
+            messagebox.showerror("Lỗi đổi nhạc nền", str(e))
+
+    def set_render_progress(self, pct, status_text, fg="#38BDF8"):
+        pct_clamped = max(0, min(100, int(pct)))
+        self.render_progress["value"] = pct_clamped
+        self.lbl_render_progress.config(text=f"Tiến độ: {status_text} ({pct_clamped}%)", foreground=fg)
+
+    def update_render_progress_from_line(self, line):
+        if not line:
+            return
+
+        if "[Buoc 1/4]" in line:
+            self.set_render_progress(3, "Đang quét & chuẩn hóa media")
+            return
+        if "Tim thay" in line and "file media hop le" in line:
+            self.set_render_progress(5, "Đã kiểm tra xong media")
+            return
+        if "[Buoc 2/4]" in line or "Generating voiceover" in line:
+            self.set_render_progress(6, "Đang tạo giọng đọc AI (TTS)")
+            return
+
+        # Batch TTS request: [Batch 01..05/30]
+        m_batch = re.search(r"\[Batch\s+(\d+)\.\.(\d+)/(\d+)\]", line)
+        if m_batch:
+            start_i, end_i, tot = int(m_batch.group(1)), int(m_batch.group(2)), max(1, int(m_batch.group(3)))
+            pct = 6 + int(24 * ((start_i - 1) / tot))
+            self.set_render_progress(pct, f"Đang gọi AI TTS câu {start_i:02d}..{end_i:02d}/{tot:02d}")
+            return
+
+        # Line TTS generated/cached: [05/30] Generated / Cached
+        m_tts = re.search(r"\[(\d+)/(\d+)\]\s+(?:Generated|Cached)\s+", line)
+        if m_tts:
+            cur, tot = int(m_tts.group(1)), max(1, int(m_tts.group(2)))
+            pct = 5 + int(25 * (cur / tot))
+            self.set_render_progress(pct, f"Âm thanh TTS: {cur:02d}/{tot:02d} câu")
+            return
+
+        if "[Buoc 3/4]" in line:
+            self.set_render_progress(32, "Đang đồng bộ phụ đề SRT")
+            return
+        if "[Buoc 4/4]" in line or "Auto-detected resolution" in line:
+            self.set_render_progress(34, "Khởi tạo FFmpeg renderer")
+            return
+        if "Chuẩn hóa Intro video" in line:
+            self.set_render_progress(35, "Đang chuẩn hóa video Intro")
+            return
+
+        # 2.5D Parallax pre-computation: [2.5D 05/22]
+        m_25d = re.search(r"\[2\.5D\s+(\d+)/(\d+)\]", line)
+        if m_25d:
+            cur, tot = int(m_25d.group(1)), max(1, int(m_25d.group(2)))
+            pct = 35 + int(20 * (cur / tot))
+            self.set_render_progress(pct, f"Tách nền 2.5D: {cur:02d}/{tot:02d} ảnh")
+            return
+
+        if "Rendering " in line and " scenes using " in line:
+            self.set_render_progress(55, "Đang dựng từng cảnh FFmpeg")
+            return
+
+        # Scene rendered: [05/30] Rendered
+        m_scene = re.search(r"\[(\d+)/(\d+)\]\s+Rendered\s+", line)
+        if m_scene:
+            cur, tot = int(m_scene.group(1)), max(1, int(m_scene.group(2)))
+            pct = 55 + int(33 * (cur / tot))
+            self.set_render_progress(pct, f"Dựng cảnh FFmpeg: {cur:02d}/{tot:02d} cảnh")
+            return
+
+        if "Concatenating content scenes" in line:
+            self.set_render_progress(90, "Đang ghép nối các cảnh")
+            return
+        if "Burning compact subtitles" in line:
+            self.set_render_progress(93, "Đang đốt phụ đề SRT lên video")
+            return
+        if "Mixing background music" in line:
+            self.set_render_progress(95, "Đang trộn nhạc nền BGM & đốt phụ đề")
+            return
+        if "Ghép Intro vào đầu video" in line:
+            self.set_render_progress(98, "Đang ghép Intro vào đầu video")
+            return
+        if "[OK] Final video ready" in line or "[HOAN THANH]" in line:
+            self.set_render_progress(100, "Hoàn tất", fg="#4ADE80")
+            return
+
+    def stop_render_process(self):
+        if self.render_proc and self.render_proc.poll() is None:
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.render_proc.pid)], capture_output=True)
+                self.log("[WARN] Đã hủy tiến trình render theo yêu cầu.")
+                self.set_render_progress(self.render_progress["value"], "Đã hủy thủ công", fg="#FBBF24")
+            except Exception as e:
+                self.log(f"[LỖI HỦY RENDER] {e}")
+
     def start_render_thread(self):
         proj_name = self.cbo_project.get()
         if not proj_name:
@@ -522,28 +904,43 @@ class SqueezingTechApp:
         sel_idx = self.cbo_voice.current()
         voice_id = voice_list[sel_idx][1] if 0 <= sel_idx < len(voice_list) else voice_list[0][1]
         force_flag = "--force" if self.chk_force.get() else ""
+        use_25d_flag = "--25d" if self.chk_25d.get() else "--no-25d"
 
         self.btn_render.config(state="disabled")
+        self.btn_stop_render.config(state="normal")
+        self.set_render_progress(1, "Đang khởi động pipeline")
         self.log(f"--- BẮT ĐẦU RENDER [{lang.upper()}]: {proj_name} (Voice: {voice_id}) ---")
 
+        def handle_output_line(text_line):
+            self.log(text_line)
+            self.update_render_progress_from_line(text_line)
+
         def run():
-            cmd = [sys.executable, os.path.join(BASE_DIR, "make_video.py"), proj_name, "--lang", lang, "--voice", voice_id]
+            cmd = [sys.executable, "-u", os.path.join(BASE_DIR, "make_video.py"), proj_name, "--lang", lang, "--voice", voice_id, use_25d_flag]
             if force_flag:
                 cmd.append(force_flag)
 
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            self.render_proc = proc
             for line in proc.stdout:
-                self.root.after(0, self.log, line.strip())
+                clean = line.strip()
+                if clean:
+                    self.root.after(0, handle_output_line, clean)
             proc.wait()
+            self.render_proc = None
 
             def finish():
                 self.btn_render.config(state="normal")
+                self.btn_stop_render.config(state="disabled")
                 self.on_project_selected()
                 if proc.returncode == 0:
+                    self.set_render_progress(100, "Hoàn tất", fg="#4ADE80")
                     out_name = f"{proj_name}_{lang}.mp4"
                     messagebox.showinfo("Thành công", f"Đã dựng xong video [{lang.upper()}]:\n{out_name}")
                 else:
-                    messagebox.showerror("Thất bại", "Quá trình render gặp lỗi! Xem log bên dưới.")
+                    if "Đã hủy" not in self.lbl_render_progress.cget("text"):
+                        self.set_render_progress(self.render_progress["value"], "Lỗi / Dừng", fg="#F87171")
+                    messagebox.showerror("Thất bại", "Quá trình render gặp lỗi hoặc đã bị hủy! Xem log bên dưới.")
 
             self.root.after(0, finish)
 

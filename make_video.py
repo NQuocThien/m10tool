@@ -89,8 +89,10 @@ def cmd_new_project(name):
     video_en_dir = os.path.join(proj_dir, "video_en")
     script_vi = os.path.join(proj_dir, "script_vi.txt")
     script_en = os.path.join(proj_dir, "script_en.txt")
-    prompts_vi = os.path.join(proj_dir, "prompts_vi.txt")
-    prompts_en = os.path.join(proj_dir, "prompts_en.txt")
+    prompts_vi_vid = os.path.join(proj_dir, "prompts_vi_video.txt")
+    prompts_vi_img = os.path.join(proj_dir, "prompts_vi_img.txt")
+    prompts_en_vid = os.path.join(proj_dir, "prompts_en_video.txt")
+    prompts_en_img = os.path.join(proj_dir, "prompts_en_img.txt")
     
     if os.path.exists(proj_dir):
         print(f"[ERROR] Thu muc du an da ton tai: {proj_dir}")
@@ -103,17 +105,22 @@ def cmd_new_project(name):
         f.write("01. Cau thoai tieng Viet canh mot o day.\n02. Cau thoai tieng Viet canh hai o day.\n")
     with open(script_en, "w", encoding="utf-8") as f:
         f.write("01. English narration for scene one.\n02. English narration for scene two.\n")
-    with open(prompts_vi, "w", encoding="utf-8") as f:
-        f.write("# BỘ PROMPT ẢNH/VIDEO KÊNH TIẾNG VIỆT (NỀN VÀNG KEM #FAF7F2)\n")
-    with open(prompts_en, "w", encoding="utf-8") as f:
-        f.write("# BỘ PROMPT ẢNH/VIDEO KÊNH TIẾNG ANH (NỀN XANH ĐEN #0B132B)\n")
+    with open(prompts_vi_vid, "w", encoding="utf-8") as f:
+        f.write("# BỘ PROMPT [VIDEO] KÊNH TIẾNG VIỆT (NỀN VÀNG KEM #FAF7F2) - 4-6 CẢNH HOOK/CLIMAX\n")
+    with open(prompts_vi_img, "w", encoding="utf-8") as f:
+        f.write("# BỘ PROMPT [IMG] KÊNH TIẾNG VIỆT (NỀN VÀNG KEM #FAF7F2) - 20-24 CẢNH TĨNH\n")
+    with open(prompts_en_vid, "w", encoding="utf-8") as f:
+        f.write("# BỘ PROMPT [VIDEO] KÊNH TIẾNG ANH (NỀN XANH ĐEN #0B132B) - 4-6 CẢNH HOOK/CLIMAX\n")
+    with open(prompts_en_img, "w", encoding="utf-8") as f:
+        f.write("# BỘ PROMPT [IMG] KÊNH TIẾNG ANH (NỀN XANH ĐEN #0B132B) - 20-24 CẢNH TĨNH\n")
         
     print(f"\n[OK] Da khoi tao du an moi tai: {proj_dir}")
-    print(f"1. Kich ban: {script_vi} (VI) | {script_en} (EN)")
-    print(f"2. Prompts : {prompts_vi} (VI) | {prompts_en} (EN)")
-    print(f"3. Media VI: {imgs_vi_dir} hoac {video_vi_dir}")
-    print(f"4. Media EN: {imgs_en_dir} hoac {video_en_dir}")
-    print(f"5. Render  : python make_video.py {name} --lang vi (hoac --lang en)\n")
+    print(f"1. Kich ban   : {script_vi} (VI) | {script_en} (EN)")
+    print(f"2. Prompts VI : {prompts_vi_vid} | {prompts_vi_img}")
+    print(f"3. Prompts EN : {prompts_en_vid} | {prompts_en_img}")
+    print(f"4. Media VI   : {imgs_vi_dir} hoac {video_vi_dir}")
+    print(f"5. Media EN   : {imgs_en_dir} hoac {video_en_dir}")
+    print(f"6. Render     : python make_video.py {name} --lang vi (hoac --lang en)\n")
 
 def get_media_dir(proj_dir, lang="vi", custom_media_dir=None):
     if custom_media_dir and os.path.exists(custom_media_dir):
@@ -132,7 +139,7 @@ def get_media_dir(proj_dir, lang="vi", custom_media_dir=None):
             return c
     return os.path.join(proj_dir, "imgs")
 
-def build_video_for_project(proj_path, lang="vi", voice=None, force=False, media_dir=None):
+def build_video_for_project(proj_path, lang="vi", voice=None, force=False, media_dir=None, motion_25d=False):
     proj_dir = resolve_project_dir(proj_path)
     if not os.path.exists(proj_dir):
         print(f"[ERROR] Khong tim thay thu muc du an: {proj_dir}")
@@ -146,9 +153,9 @@ def build_video_for_project(proj_path, lang="vi", voice=None, force=False, media
     # Determine default voice based on language
     if voice is None:
         if lang == "vi":
-            voice = "vi-VN-NamMinhNeural"
+            voice = "gemini:voice_5mxlq1k9luls"
         else:
-            voice = "en-US-ChristopherNeural"
+            voice = "gemini:Charon"
 
     # Distinguish audio, sub, and video outputs per language
     audio_dir = os.path.join(proj_dir, f"audio_{lang}")
@@ -185,7 +192,7 @@ def build_video_for_project(proj_path, lang="vi", voice=None, force=False, media
     
     # 4. Render Video
     print(f"\n[Buoc 4/4] Dung video Full HD ({lang.upper()})...")
-    final_video = render_project(media_paths, enriched_items, srt_path, output_mp4, lang=lang)
+    final_video = render_project(media_paths, enriched_items, srt_path, output_mp4, lang=lang, motion_25d=motion_25d)
     
     print(f"\n========================================================")
     print(f"HOAN THANH VIDEO: {os.path.basename(final_video)}")
@@ -198,9 +205,11 @@ def main():
     parser.add_argument("--lang", choices=["vi", "en"], default="vi", help="Ngon ngu video: 'vi' (Tieng Viet) hoac 'en' (Tieng Anh)")
     parser.add_argument("--new", metavar="NAME", help="Tao nhanh 1 folder du an moi voi cau truc mau")
     parser.add_argument("--list", action="store_true", help="Liet ke toan bo cac du an video hien co")
-    parser.add_argument("--voice", default=None, help="Giong doc Azure Neural TTS (vi: NamMinh, en: Christopher)")
+    parser.add_argument("--voice", default=None, help="Giong doc TTS (mac dinh: gemini:Charon; hoac edge-tts vi-VN-NamMinhNeural)")
     parser.add_argument("--media-dir", default=None, help="Duong dan thu muc media tuy chon (mac dinh tu nhan video_vi hoac imgs)")
     parser.add_argument("--force", action="store_true", help="Ep tao lai audio ngay ca khi da cache")
+    parser.add_argument("--25d", dest="use_25d", action="store_true", help="Bat hieu ung tach lop 2.5D (chi dung cho anh chup chan dung/vat the don)")
+    parser.add_argument("--no-25d", action="store_true", help="Tat hieu ung tach lop Motion 2.5D cho anh tinh (mac dinh)")
     
     args = parser.parse_args()
     
@@ -213,7 +222,7 @@ def main():
         return
         
     if args.project:
-        build_video_for_project(args.project, lang=args.lang, voice=args.voice, force=args.force, media_dir=args.media_dir)
+        build_video_for_project(proj_path=args.project, lang=args.lang, voice=args.voice, force=args.force, media_dir=args.media_dir, motion_25d=bool(args.use_25d and not args.no_25d))
         return
         
     cmd_list_projects()
