@@ -780,7 +780,7 @@ def _render_short_scene(order_idx, media_path, audio_path, dur, overlay_png, box
         ]
     else:
         total_frames = max(1, int(dur * fps))
-        max_zoom = 1.06
+        max_zoom = 1.12
         step = (max_zoom - 1.00) / max(1, total_frames)
         if order_idx % 2 == 1:
             zoom_expr = f"min(zoom+{step:.6f},{max_zoom})"
@@ -969,10 +969,14 @@ def render_short_thumbnail(cfg, hero_video_path, output_jpg, temp_dir):
     accent_rgb = tuple(int(accent_hex[i:i+2], 16) for i in (0, 2, 4)) + (255,)
 
     raw_frame_jpg = os.path.join(temp_dir, "hero_frame.jpg")
-    subprocess.run(
-        [FFMPEG_PATH, "-y", "-ss", "00:00:02.50", "-i", hero_video_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
-        capture_output=True,
-    )
+    ext = os.path.splitext(hero_video_path)[1].lower()
+    if ext in {".jpg", ".jpeg", ".png", ".webp"}:
+        Image.open(hero_video_path).convert("RGB").save(raw_frame_jpg, quality=96)
+    else:
+        subprocess.run(
+            [FFMPEG_PATH, "-y", "-ss", "00:00:02.50", "-i", hero_video_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
+            capture_output=True,
+        )
 
     canvas = Image.new("RGBA", (W, H), bg_cream)
     draw = ImageDraw.Draw(canvas)

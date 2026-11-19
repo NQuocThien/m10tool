@@ -17,27 +17,32 @@ Array of 3–4 episode objects. Each object maps directly to `build_shorts.py` /
 | `thumb_big_text` | string | 2-line hook text on thumbnail (`\n` separated, uppercase, 2–4 words/line) |
 | `thumb_sub_badge` | string | Short top badge on thumbnail (include main topic + episode) |
 | `yt_titles` | string[] | 3 high-CTR YouTube Shorts titles ending with `#shorts` (must include main topic keyword) |
-| `yt_description` | string | Series context line (`📌 Chuỗi: [Chủ đề chính] - Tập X/4`) + bullet takeaways + CTA + hashtags |
-| `yt_pinned_comment` | string | Engaging question for comment section |
+| `yt_description` | string | Series context line (`📌 Chuỗi: [Chủ đề chính] - Tập X/4`) + bullet takeaways + CTA pointing to the clickable `▶` Related Video button (NO raw URLs) + hashtags |
+| `yt_pinned_comment` | string | CTA pointing to the clickable `▶` Related Video button at bottom-left (NO raw URLs) + engaging question |
 | `thumb_desc` | string | Visual layout description of the thumbnail |
-| `thumb_prompt` | string | 9:16 AI image prompt matching channel style, ending with anti-watermark/logo flags |
+| `thumb_prompt` | string | 9:16 AI image prompt matching channel style, ending with mandatory `Negative:` block & `--ar 9:16` |
 
-## Channel Palettes
+## Channel Palettes & Mandatory Negative Suffix
+
+Attach verbatim to every `thumb_prompt`:
+```text
+Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo.
+```
 
 ### VI — Vắt Chanh Công Nghệ (`shorts_config_vi.json`)
 - Background: `#FAF7F2` (Warm Cream)
 - Allowed `accent_color`: `#D35400` (Terracotta), `#7CB342` (Lime Green), `#F4C430` (Golden Lemon)
-- Thumbnail prompt style: `Vertical 9:16 YouTube Shorts thumbnail, 2D flat vector editorial tech infographic on a warm cream background (#FAF7F2), clean rounded charcoal line art (#1C1917), no text, no watermark --ar 9:16`
+- Motorbike keyword rule: Always use `sit-down Vespa-style electric moped motorbike with padded saddle seat` + `--no kick scooter, stand-up scooter`.
 
 ### EN — Squeezing Tech (`shorts_config_en.json`)
 - Background: `#0B132B` (Dark Navy)
 - Allowed `accent_color`: `#76FF03` (Neon Lime), `#00E5FF` (Electric Cyan), `#FFB300` (Amber)
-- Thumbnail prompt style: `Vertical 9:16 YouTube Shorts thumbnail, minimalist 2D flat vector tech infographic on a dark navy blue background (#0B132B), sharp glowing geometric vector line art, high contrast, no text, no watermark, no google logo, no gemini logo, no star icon --no 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 9:16`
 
-## Slicing & Main-Topic Context Guidelines
+## High-Retention Pacing & Slicing Guidelines
 1. **3-Layer Main Topic Visibility**:
-   - **Layer 1 (Top Overlay Pill)**: `main_topic` + `badge` stays visible 100% of the time at the top of the 9:16 frame (`PIN XE ĐIỆN: CÔNG BỐ VS THỰC TẾ • TẬP 3/4`).
-   - **Layer 2 (First Spoken Scene)**: Scene `scenes[0]` of every episode must explicitly mention the main subject (never start an episode with a dangling line like *"Thủ phạm thứ ba là..."* without prepending a context scene such as Scene `1`, `3`, or `8`).
-   - **Layer 3 (Subtitle Card Progress & Description)**: Subtitle header shows `Tập X/4 • Cảnh Y/M`, and `yt_description` states the series name and episode number.
-2. Keep each Short between **30s and 58s** (typically 6–8 scenes).
-3. Verify `len(script) == len(media)` before running `build_shorts.py`.
+   - **Layer 1 (Top Overlay Pill)**: `main_topic` + `badge` visible 100% of the time (`MAIN_TOPIC • TẬP X/4`).
+   - **Layer 2 (First Spoken Scene)**: Scene `scenes[0]` of every episode explicitly states the main subject.
+   - **Layer 3 (Outro Hook CTA at `1.0x`)**: `build_shorts.py` appends a `~2.5s` branded CTA card using `resources/shorts_cta_{lang}.mp3` at **natural `1.0x` speed** (no speedup on outro hook).
+2. **Pacing Target**: Keep each Short between **35s and 50s** after `1.18x` content tightening + `~2.5s` `1.0x` Outro Hook (total strictly `< 58s`).
+3. **Audio Assets**: Place `resources/bgm_shorts.mp3` (124 BPM upbeat), `resources/sfx_whoosh.wav`, `resources/sfx_pop.wav`, and `resources/shorts_cta_{vi,en}.mp3` (1.0x speed).
+4. Verify `len(script) == len(media)` before running `build_shorts.py`.

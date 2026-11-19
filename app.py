@@ -37,7 +37,9 @@ def load_settings():
         "watermark_in_dir": "",
         "watermark_out_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
         "watermark_naming_mode": "keep",
-        "last_prompt_file": ""
+        "last_prompt_file": "",
+        "bot_wait_min": 25,
+        "bot_wait_max": 40
     }
     if os.path.exists(SETTINGS_FILE):
         try:
@@ -365,6 +367,46 @@ class SqueezingTechApp:
         self.ent_prompt_file.pack(side="left", padx=6)
         ttk.Button(f_p, text="Chọn file...", style="Secondary.TButton", command=self.browse_prompt_file).pack(side="left")
 
+        f_wait = ttk.Frame(card_ctrl, style="Card.TFrame")
+        f_wait.pack(fill="x", pady=(6, 2))
+        ttk.Label(f_wait, text="Chờ giữa 2 câu:", style="Card.TLabel", width=14).pack(side="left")
+
+        self.var_wait_min = tk.IntVar(value=25)
+        self.var_wait_max = tk.IntVar(value=40)
+
+        self.spn_wait_min = tk.Spinbox(
+            f_wait, from_=1, to=600, width=5, textvariable=self.var_wait_min,
+            bg="#0F172A", fg="#38BDF8", insertbackground="white",
+            buttonbackground="#334155", relief="flat", font=("Segoe UI", 9, "bold")
+        )
+        self.spn_wait_min.pack(side="left", padx=(6, 4))
+
+        ttk.Label(f_wait, text="đến", style="CardMuted.TLabel").pack(side="left", padx=2)
+
+        self.spn_wait_max = tk.Spinbox(
+            f_wait, from_=1, to=600, width=5, textvariable=self.var_wait_max,
+            bg="#0F172A", fg="#38BDF8", insertbackground="white",
+            buttonbackground="#334155", relief="flat", font=("Segoe UI", 9, "bold")
+        )
+        self.spn_wait_max.pack(side="left", padx=(4, 4))
+
+        ttk.Label(f_wait, text="giây  |  Chọn nhanh:", style="CardMuted.TLabel").pack(side="left", padx=(2, 6))
+
+        self.bot_wait_presets = [
+            ("Siêu nhanh - Ảnh (8 - 12s)", 8, 12),
+            ("Nhanh - Ảnh (15 - 20s)", 15, 20),
+            ("Mặc định - Ảnh (25 - 40s)", 25, 40),
+            ("Chậm / Video Veo (45 - 60s)", 45, 60),
+            ("Video Veo an toàn (60 - 90s)", 60, 90),
+        ]
+        self.cbo_wait_preset = ttk.Combobox(
+            f_wait, state="readonly", width=26, font=("Segoe UI", 9),
+            values=[p[0] for p in self.bot_wait_presets]
+        )
+        self.cbo_wait_preset.current(2)
+        self.cbo_wait_preset.pack(side="left", padx=2)
+        self.cbo_wait_preset.bind("<<ComboboxSelected>>", self.on_wait_preset_selected)
+
         f_actions = ttk.Frame(card_ctrl, style="Card.TFrame")
         f_actions.pack(fill="x", pady=(10, 4))
 
@@ -451,6 +493,19 @@ class SqueezingTechApp:
             self.ent_prompt_file.delete(0, "end")
             self.ent_prompt_file.insert(0, p_file)
 
+        w_min = self.settings.get("bot_wait_min", 25)
+        w_max = self.settings.get("bot_wait_max", 40)
+        try:
+            self.var_wait_min.set(max(1, int(w_min)))
+            self.var_wait_max.set(max(int(w_min), int(w_max)))
+        except Exception:
+            self.var_wait_min.set(25)
+            self.var_wait_max.set(40)
+        for idx, (_, p_min, p_max) in enumerate(self.bot_wait_presets):
+            if p_min == self.var_wait_min.get() and p_max == self.var_wait_max.get():
+                self.cbo_wait_preset.current(idx)
+                break
+
         last_proj = self.settings.get("last_project", "")
         if last_proj in self.cbo_project["values"]:
             self.cbo_project.set(last_proj)
@@ -480,6 +535,9 @@ class SqueezingTechApp:
         self.settings["watermark_in_path"] = self.ent_img_in.get().strip()
         self.settings["last_prompt_file"] = self.ent_prompt_file.get().strip()
         self.settings["last_project"] = self.cbo_project.get().strip()
+        w_min, w_max = self._get_bot_wait_range()
+        self.settings["bot_wait_min"] = w_min
+        self.settings["bot_wait_max"] = w_max
         save_settings(self.settings)
         self.root.destroy()
 
@@ -1029,6 +1087,26 @@ class SqueezingTechApp:
         threading.Thread(target=run, daemon=True).start()
 
     # Bot Google Flow
+    def on_wait_preset_selected(self, event=None):
+        idx = self.cbo_wait_preset.current()
+        if 0 <= idx < len(self.bot_wait_presets):
+            _, p_min, p_max = self.bot_wait_presets[idx]
+            self.var_wait_min.set(p_min)
+            self.var_wait_max.set(p_max)
+
+    def _get_bot_wait_range(self):
+        try:
+            w_min = max(1, int(self.spn_wait_min.get()))
+        except Exception:
+            w_min = 25
+        try:
+            w_max = max(w_min, int(self.spn_wait_max.get()))
+        except Exception:
+            w_max = max(w_min, 40)
+        self.var_wait_min.set(w_min)
+        self.var_wait_max.set(w_max)
+        return w_min, w_max
+
     def browse_prompt_file(self):
         path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
         if path:
@@ -1108,11 +1186,16 @@ class SqueezingTechApp:
         self.bot_progress["value"] = 0
         self.lbl_bot_progress.config(text="Tiến độ: Đang khởi động...")
 
+        w_min, w_max = self._get_bot_wait_range()
+        self.settings["bot_wait_min"] = w_min
+        self.settings["bot_wait_max"] = w_max
+        save_settings(self.settings)
+
         self.append_bot_log("==================================================")
-        self.append_bot_log(f"--- KHỞI ĐỘNG BOT GOOGLE FLOW: {os.path.basename(prompt_file)} ---")
+        self.append_bot_log(f"--- KHỞI ĐỘNG BOT GOOGLE FLOW: {os.path.basename(prompt_file)} (Chờ: {w_min}s - {w_max}s) ---")
 
         def run():
-            cmd = [sys.executable, os.path.join(BASE_DIR, "auto_flow.py"), prompt_file]
+            cmd = [sys.executable, "-u", os.path.join(BASE_DIR, "auto_flow.py"), prompt_file, str(w_min), str(w_max)]
             env = os.environ.copy()
             env["PYTHONIOENCODING"] = "utf-8"
             try:

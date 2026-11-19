@@ -28,8 +28,12 @@ else:
         PROMPT_FILE = "prompts.txt"
 
 GOOGLE_FLOW_URL = "https://flow.google/"
-WAIT_MIN = 25
-WAIT_MAX = 40
+WAIT_MIN = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 25
+WAIT_MAX = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3].isdigit() else 40
+if WAIT_MIN < 1:
+    WAIT_MIN = 1
+if WAIT_MAX < WAIT_MIN:
+    WAIT_MAX = WAIT_MIN
 READY_FLAG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".bot_ready")
 
 # Xóa cờ sẵn sàng cũ nếu còn tồn tại
@@ -51,7 +55,7 @@ if not prompts:
     log_msg("LỖI", f"File prompt '{PROMPT_FILE}' rỗng hoặc toàn dòng ghi chú (#)!")
     sys.exit(1)
 
-log_msg("THÔNG TIN", f"Đã nạp thành công {len(prompts)} câu prompt từ '{os.path.basename(PROMPT_FILE)}'.")
+log_msg("THÔNG TIN", f"Đã nạp thành công {len(prompts)} câu prompt từ '{os.path.basename(PROMPT_FILE)}' (Thời gian chờ: {WAIT_MIN}s - {WAIT_MAX}s).")
 
 
 def find_flow_input(page):
@@ -306,18 +310,19 @@ try:
                 click_send_button(page, input_box)
                 log_msg("THÀNH CÔNG", f"Đã gửi thành công prompt [{i}/{total}] lên Google Flow!")
 
-                # Chờ sinh ảnh ngẫu nhiên
-                wait_time = random.randint(WAIT_MIN, WAIT_MAX)
-                log_msg("CHỜ SINH", f"Đang chờ Flow tạo ảnh ({wait_time}s) để tránh bị chặn tốc độ...")
-                
-                # Countdown in 5s increments for clear visual feedback
-                remaining = wait_time
-                while remaining > 0:
-                    step = min(5, remaining)
-                    time.sleep(step)
-                    remaining -= step
-                    if remaining > 0 and remaining % 10 == 0:
-                        log_msg("CHỜ SINH", f"Còn {remaining}s trước khi gửi prompt tiếp theo...")
+                if i < total:
+                    # Chờ sinh ảnh ngẫu nhiên trong khoảng đã chọn
+                    wait_time = random.randint(WAIT_MIN, WAIT_MAX)
+                    log_msg("CHỜ SINH", f"Đang chờ Flow xử lý ({wait_time}s, cấu hình {WAIT_MIN}-{WAIT_MAX}s) trước khi nạp prompt tiếp theo...")
+
+                    # Countdown in 5s increments for clear visual feedback
+                    remaining = wait_time
+                    while remaining > 0:
+                        step = min(5, remaining)
+                        time.sleep(step)
+                        remaining -= step
+                        if remaining > 0 and (remaining % 10 == 0 or remaining <= 5):
+                            log_msg("CHỜ SINH", f"Còn {remaining}s trước khi gửi prompt tiếp theo...")
 
             except Exception as e:
                 log_msg("LỖI", f"Lỗi ở prompt {i}: {e}")

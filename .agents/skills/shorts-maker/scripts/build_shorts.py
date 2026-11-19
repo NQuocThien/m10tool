@@ -12,11 +12,13 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from core.config import DEFAULT_FPS, FFMPEG_PATH, PROJECTS_DIR
+from core.config import DEFAULT_BGM_VOLUME, DEFAULT_FPS, FFMPEG_PATH, PROJECTS_DIR, RESOURCES_DIR
+from core.renderer import get_bgm_path
 from core.sorter import get_sorted_images
 from core.subtitles import generate_subtitles
 from core.tts import load_script
 import make_shorts as ms
+from PIL import Image, ImageDraw
 
 REQUIRED_FIELDS = [
     "id",
@@ -128,6 +130,173 @@ def format_step_label(ep_idx, total_eps, scene_order_idx, total_scenes_in_ep, la
     return f"Tập {ep_idx}/{total_eps} • Cảnh {scene_order_idx}/{total_scenes_in_ep}"
 
 
+def _probe_audio_duration(audio_path):
+    import re
+    res = subprocess.run([FFMPEG_PATH, "-i", audio_path], capture_output=True, text=True, encoding="utf-8", errors="ignore")
+    m = re.search(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)", res.stderr)
+    if not m:
+        return 2.2
+    return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+
+
+def _prepare_punchy_short_audio(src_mp3, dst_mp3, speed=1.18, sfx_path=None):
+    """Trim dead silence, tighten pacing (1.18x), boost vocal clarity, and layer subtle transition SFX."""
+    voice_af = (
+        f"silenceremove=start_periods=1:start_threshold=-42dB,"
+        f"areverse,silenceremove=start_periods=1:start_threshold=-42dB,areverse,"
+        f"atempo={speed:.2f},"
+        f"equalizer=f=3000:t=q:w=1.5:g=2.5,"
+        f"apad=pad_dur=0.06"
+    )
+    if sfx_path and os.path.isfile(sfx_path):
+        cmd = [
+            FFMPEG_PATH, "-y",
+            "-i", src_mp3,
+            "-i", sfx_path,
+            "-filter_complex",
+            f"[0:a]{voice_af}[v];[1:a]volume=0.35[sfx];[v][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+            "-map", "[aout]",
+            "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            dst_mp3,
+        ]
+    else:
+        cmd = [
+            FFMPEG_PATH, "-y",
+            "-i", src_mp3,
+            "-af", voice_af,
+            "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            dst_mp3,
+        ]
+    res = subprocess.run(cmd, capture_output=True)
+    if res.returncode != 0 or not os.path.isfile(dst_mp3) or os.path.getsize(dst_mp3) == 0:
+        shutil.copyfile(src_mp3, dst_mp3)
+    return dst_mp3
+
+
+def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
+    """Render a ~2-2.5s Outro Hook CTA card directing viewers to the full video in pinned comment."""
+    W, H = 1080, 1920
+    is_en = (lang == "en")
+    bg_rgba = (11, 19, 43, 255) if is_en else (250, 247, 242, 255)
+    card_rgba = (19, 31, 66, 255) if is_en else (255, 253, 249, 255)
+    text_main = (248, 250, 252, 255) if is_en else (28, 25, 23, 255)
+    border_rgba = (0, 229, 255, 255) if is_en else (28, 25, 23, 255)
+    accent_primary = (118, 255, 3, 255) if is_en else (211, 84, 0, 255)
+    accent_yellow = (255, 179, 0, 255) if is_en else (244, 196, 48, 255)
+    accent_green = (0, 229, 255, 255) if is_en else (124, 179, 66, 255)
+
+    canvas = Image.new("RGBA", (W, H), bg_rgba)
+    draw = ImageDraw.Draw(canvas)
+
+    # Decorative corner circles
+    draw.ellipse((-180, -180, 320, 320), fill=(accent_yellow[0], accent_yellow[1], accent_yellow[2], 55))
+    draw.ellipse((W - 320, H - 360, W + 180, H + 140), fill=(accent_green[0], accent_green[1], accent_green[2], 50))
+
+    # Top brand pill
+    brand_text = "SQUEEZING TECH" if is_en else "VẮT CHANH CÔNG NGHỆ"
+    pill_w, pill_h = 560, 84
+    pill_x, pill_y = (W - pill_w) // 2, 240
+    draw.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=42, fill=card_rgba, outline=border_rgba, width=4)
+    logo_path = os.path.join(RESOURCES_DIR, "logo_vi.jpg")
+    if not is_en and os.path.exists(logo_path):
+        try:
+            logo = Image.open(logo_path).convert("RGBA").resize((60, 60), Image.LANCZOS)
+            mask = Image.new("L", (60, 60), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, 60, 60), fill=255)
+            canvas.paste(logo, (pill_x + 16, pill_y + 12), mask)
+        except Exception:
+            pass
+    font_brand = ms._load_font(30, bold=True)
+    draw.text((pill_x + pill_w // 2 + (24 if not is_en else 0), pill_y + pill_h // 2), brand_text, font=font_brand, fill=text_main, anchor="mm")
+
+    # Main topic pill
+    font_badge = ms._load_font(26, bold=True)
+    main_topic = cfg.get("main_topic", overlay_badge).upper()
+    bb = draw.textbbox((0, 0), main_topic, font=font_badge)
+    bw = min(940, (bb[2] - bb[0]) + 64)
+    bx, by = (W - bw) // 2, 365
+    draw.rounded_rectangle((bx, by, bx + bw, by + 62), radius=31, fill=accent_primary, outline=border_rgba, width=3)
+    draw.text((W // 2, by + 31), main_topic, font=font_badge, fill=(255, 255, 255, 255) if not is_en else (11, 19, 43, 255), anchor="mm")
+
+    # Center CTA Card
+    cx1, cy1, cx2, cy2 = 75, 560, W - 75, 1340
+    draw.rounded_rectangle((cx1 + 10, cy1 + 12, cx2 + 10, cy2 + 12), radius=42, fill=border_rgba)
+    draw.rounded_rectangle((cx1, cy1, cx2, cy2), radius=42, fill=card_rgba, outline=border_rgba, width=6)
+
+    # Top yellow header bar inside card
+    draw.rounded_rectangle((cx1 + 36, cy1 + 44, cx2 - 36, cy1 + 148), radius=24, fill=accent_yellow, outline=border_rgba, width=4)
+    font_sub = ms._load_font(40, bold=True)
+    hdr_txt = "WANT THE FULL BREAKDOWN?" if is_en else "MUỐN XEM TRỌN BỘ PHÂN TÍCH?"
+    draw.text((W // 2, cy1 + 96), hdr_txt, font=font_sub, fill=(28, 25, 23, 255), anchor="mm")
+
+    # Giant CTA headline
+    font_big = ms._load_font(64, bold=True)
+    line1 = "WATCH FULL VIDEO" if is_en else "XEM FULL VIDEO GỐC"
+    line2 = "TAP RELATED LINK BELOW!" if is_en else "GÓC DƯỚI BÊN TRÁI!"
+    draw.text((W // 2, cy1 + 295), line1, font=font_big, fill=accent_primary, anchor="mm")
+    draw.text((W // 2, cy1 + 395), line2, font=font_big, fill=accent_green, anchor="mm")
+
+    # Related video arrow pill button
+    draw.rounded_rectangle((cx1 + 85, cy1 + 520, cx2 - 85, cy1 + 630), radius=55, fill=accent_primary, outline=border_rgba, width=5)
+    font_btn = ms._load_font(36, bold=True)
+    btn_txt = "▶ TAP RELATED VIDEO BELOW" if is_en else "▶ BẤM VIDEO LIÊN QUAN BÊN DƯỚI"
+    draw.text((W // 2, cy1 + 575), btn_txt, font=font_btn, fill=(255, 255, 255, 255) if not is_en else (11, 19, 43, 255), anchor="mm")
+
+    # Slogan footer
+    font_slogan = ms._load_font(30, bold=True)
+    slogan = "Extracting Value from Everyday Tech" if is_en else "Vắt sạch thông số, giữ lại cách dùng!"
+    draw.text((W // 2, 1460), slogan, font=font_slogan, fill=text_main, anchor="mm")
+
+    cta_png = os.path.join(temp_dir, "outro_cta.png")
+    canvas.convert("RGB").save(cta_png, quality=96)
+
+    cta_audio = os.path.join(RESOURCES_DIR, f"shorts_cta_{lang}.mp3")
+    if os.path.isfile(cta_audio) and os.path.getsize(cta_audio) > 0:
+        cta_dur = max(2.0, min(4.5, _probe_audio_duration(cta_audio)))
+        has_voice = True
+    else:
+        cta_dur = 2.2
+        has_voice = False
+
+    total_frames = max(1, int(cta_dur * fps))
+    step = 0.05 / max(1, total_frames)
+    vf = (
+        f"scale={W}:{H},zoompan=z='min(zoom+{step:.6f},1.05)':"
+        f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={W}x{H}:fps={fps},format=yuv420p"
+    )
+    outro_mp4 = os.path.join(temp_dir, "short_outro_cta.mp4")
+
+    if has_voice:
+        cmd = [
+            FFMPEG_PATH, "-y",
+            "-loop", "1", "-t", f"{cta_dur:.3f}", "-i", cta_png,
+            "-i", cta_audio,
+            "-vf", vf,
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-shortest",
+            outro_mp4,
+        ]
+    else:
+        cmd = [
+            FFMPEG_PATH, "-y",
+            "-loop", "1", "-t", f"{cta_dur:.3f}", "-i", cta_png,
+            "-f", "lavfi", "-t", f"{cta_dur:.3f}", "-i", "anullsrc=r=48000:cl=stereo",
+            "-vf", vf,
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-shortest",
+            outro_mp4,
+        ]
+
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+    if res.returncode != 0:
+        raise RuntimeError(f"FFmpeg CTA outro error: {res.stderr[-300:]}")
+    return outro_mp4, cta_dur
+
+
 def build_shorts(proj_name, lang, paths, configs):
     """Render vertical 9:16 Short videos for all configured episodes."""
     shorts_out_dir = paths["shorts_out_dir"]
@@ -150,15 +319,20 @@ def build_shorts(proj_name, lang, paths, configs):
         try:
             selected_audio = []
             selected_media = []
+            sfx_whoosh = os.path.join(RESOURCES_DIR, "sfx_whoosh.wav")
+            sfx_pop = os.path.join(RESOURCES_DIR, "sfx_pop.wav")
             for order_idx, sc_num in enumerate(scene_nums, 1):
                 audio_p = os.path.join(paths["audio_dir"], f"{sc_num:02d}_voice.mp3")
                 if not os.path.isfile(audio_p):
                     raise FileNotFoundError(f"Missing audio file: {audio_p}")
+                punchy_audio = os.path.join(temp_dir, f"punchy_{order_idx:02d}.mp3")
+                sfx_use = sfx_whoosh if order_idx == 1 else sfx_pop
+                _prepare_punchy_short_audio(audio_p, punchy_audio, speed=1.18, sfx_path=sfx_use)
                 selected_audio.append({
                     "index": order_idx,
                     "scene_num": sc_num,
                     "text": all_lines[sc_num - 1],
-                    "audio_path": audio_p,
+                    "audio_path": punchy_audio,
                 })
                 selected_media.append(all_media[sc_num - 1])
 
@@ -204,18 +378,54 @@ def build_shorts(proj_name, lang, paths, configs):
 
                 clip_files = [fut.result() for _, _, _, fut in tasks]
 
+            # Append ~2.2s Outro CTA hook pointing to full video in pinned comment
+            outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, DEFAULT_FPS)
+            clip_files.append(outro_mp4)
+
             concat_txt = os.path.join(temp_dir, "concat.txt")
             with open(concat_txt, "w", encoding="utf-8") as f_cat:
                 for c in clip_files:
                     f_cat.write(f"file '{c.replace(chr(92), '/')}'\n")
 
+            raw_concat_mp4 = os.path.join(temp_dir, f"{short_id}_raw.mp4")
             output_mp4 = os.path.join(shorts_out_dir, f"{short_id}.mp4")
-            cmd = [FFMPEG_PATH, "-y", "-f", "concat", "-safe", "0", "-i", concat_txt, "-c", "copy", output_mp4]
+            cmd = [FFMPEG_PATH, "-y", "-f", "concat", "-safe", "0", "-i", concat_txt, "-c", "copy", raw_concat_mp4]
             res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
             if res.returncode != 0:
                 raise RuntimeError(f"FFmpeg concat error: {res.stderr[-300:]}")
 
-            total_dur = enriched[-1]["end"]
+            total_dur = enriched[-1]["end"] + outro_dur
+            shorts_bgm = os.path.join(RESOURCES_DIR, "bgm_shorts.mp3")
+            if os.path.isfile(shorts_bgm):
+                bgm_path = shorts_bgm
+                bgm_vol = 0.13
+            else:
+                bgm_path = get_bgm_path(lang=lang)
+                bgm_vol = DEFAULT_BGM_VOLUME
+
+            if bgm_path and os.path.isfile(bgm_path):
+                fade_start = max(0.0, total_dur - 1.0)
+                af_mix = (
+                    f"[1:a]volume={bgm_vol},afade=t=out:st={fade_start:.2f}:d=1.0[bgm];"
+                    f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                )
+                cmd_bgm = [
+                    FFMPEG_PATH, "-y",
+                    "-i", raw_concat_mp4,
+                    "-stream_loop", "-1", "-i", bgm_path,
+                    "-filter_complex", af_mix,
+                    "-map", "0:v:0",
+                    "-map", "[aout]",
+                    "-c:v", "copy",
+                    "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+                    output_mp4,
+                ]
+                res_bgm = subprocess.run(cmd_bgm, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+                if res_bgm.returncode != 0:
+                    shutil.copyfile(raw_concat_mp4, output_mp4)
+            else:
+                shutil.copyfile(raw_concat_mp4, output_mp4)
+
             size_mb = os.path.getsize(output_mp4) / (1024 * 1024)
             print(f"[DONE] {os.path.basename(output_mp4)} | {total_dur:.1f}s | {size_mb:.2f} MB")
             generated.append((output_mp4, total_dur, size_mb))
