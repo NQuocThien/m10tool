@@ -14,7 +14,7 @@
 
 ## 3. Liên Kết Phong Cách Logo & Banner Kênh
 Khi viết prompt cho các cảnh giải thích hoặc so sánh, lồng ghép tinh tế các yếu tố nhận diện từ Logo & Banner kênh:
-- **Biểu tượng lõi năng lượng**: `minimalist circular battery emblem` hoặc `clean circular wave icon`.
+- **Biểu tượng lõi năng lượng & Linh vật Chanh chuyển động (BẮT BUỘC trong MỌI cảnh `[VIDEO]`)**: `a cute animated nerdy lemon mascot wearing glowing cyan round glasses` đang cử động sinh động tương tác với bối cảnh (chỉ tay, bật cầu dao, quạt bụi, giơ ngón cái...) kết hợp `minimalist circular battery emblem`.
 - **Đường dẫn mạch & Tín hiệu**: `glowing cyan circuit traces` và `neon lime energy indicator dots`.
 - **Từ khóa bắt buộc cho Xe Máy Điện (Tránh vẽ nhầm xe trượt Kick Scooter)**: Luôn dùng `sit-down Vespa-style electric moped motorbike with padded saddle seat and front leg shield` (hoặc `electric motorbike`), kèm hậu tố cấm `no kick scooter, no stand-up scooter` và `--no kick scooter, stand-up scooter, push scooter`. **TUYỆT ĐỐI KHÔNG** viết trống không là `electric scooter`.
 - **Bố cục**: Mặt cắt kỹ thuật tối giản (`cutaway 2D vector schematic`, `top-down technical blueprint`), không rườm rà.

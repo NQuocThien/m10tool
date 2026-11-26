@@ -324,6 +324,23 @@ SHORTS_CONFIG_EN = [
 ]
 
 
+import re
+
+
+_HIGHLIGHT_UNITS = {
+    "triệu", "tỷ", "ngàn", "nghìn", "trăm", "năm", "tháng", "tuần", "ngày",
+    "tiếng", "giờ", "phút", "giây", "lần", "bộ", "cây", "ký", "mét", "vạch",
+    "chu", "kỳ", "배", "million", "billion", "years", "months", "hours",
+    "minutes", "seconds", "cycles", "times", "miles", "kilometers", "percent",
+}
+
+_HIGHLIGHT_KEYWORDS = {
+    "lfp", "ncm", "bms", "ip67", "ip68", "graphene", "lithium", "lithium-ion",
+    "silicon-carbon", "sulfide", "eco", "sport", "km/h", "wh/kg", "kwh",
+    "mah", "mpa", "usd", "220v", "lab",
+}
+
+
 def _load_font(size, bold=True):
     font_candidates = [
         r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
@@ -353,6 +370,74 @@ def _wrap_text_lines(draw, text, font, max_width):
     return lines
 
 
+def _blend_rgba(base_rgba, tint_rgba, alpha_ratio):
+    r = int(base_rgba[0] * (1 - alpha_ratio) + tint_rgba[0] * alpha_ratio)
+    g = int(base_rgba[1] * (1 - alpha_ratio) + tint_rgba[1] * alpha_ratio)
+    b = int(base_rgba[2] * (1 - alpha_ratio) + tint_rgba[2] * alpha_ratio)
+    return (r, g, b, 255)
+
+
+def _parse_step_progress(step_label):
+    """Extract (current_scene, total_scenes) from step_label like 'Tập 1/4 • Cảnh 3/6'."""
+    if not step_label:
+        return (0, 0)
+    matches = re.findall(r"(\d+)\s*/\s*(\d+)", step_label)
+    if not matches:
+        return (0, 0)
+    cur_s, tot_s = matches[-1]
+    return (int(cur_s), int(tot_s))
+
+
+def _classify_highlight_words(words):
+    """Return boolean list marking numeric tokens, units, and key tech terms for visual pop."""
+    flags = [False] * len(words)
+    for i, raw_w in enumerate(words):
+        clean_w = raw_w.strip(".,!?:;\"'()[]{}—–-")
+        lower_w = clean_w.lower()
+        if not clean_w:
+            continue
+        if any(ch.isdigit() for ch in clean_w) or lower_w in _HIGHLIGHT_KEYWORDS:
+            flags[i] = True
+        elif lower_w in _HIGHLIGHT_UNITS and i > 0 and flags[i - 1]:
+            flags[i] = True
+    return flags
+
+
+def _draw_highlighted_subtitle_line(
+    draw,
+    line_str,
+    lx,
+    ly,
+    font,
+    normal_fill,
+    highlight_fill,
+    pill_fill=None,
+):
+    """Draw a subtitle line while highlighting numeric tokens and key tech keywords."""
+    words = line_str.split()
+    if not words:
+        return
+    flags = _classify_highlight_words(words)
+    if not any(flags):
+        draw.text((lx, ly), line_str, font=font, fill=normal_fill)
+        return
+
+    for i, w in enumerate(words):
+        prefix = " ".join(words[:i]) + (" " if i > 0 else "")
+        px = lx + (draw.textbbox((0, 0), prefix, font=font)[2] if prefix else 0)
+        wb = draw.textbbox((px, ly), w, font=font)
+        if flags[i]:
+            if pill_fill:
+                draw.rounded_rectangle(
+                    (wb[0] - 6, wb[1] - 4, wb[2] + 6, wb[3] + 4),
+                    radius=10,
+                    fill=pill_fill,
+                )
+            draw.text((px, ly), w, font=font, fill=highlight_fill)
+        else:
+            draw.text((px, ly), w, font=font, fill=normal_fill)
+
+
 def create_short_overlay(
     output_png,
     badge_text,
@@ -363,11 +448,11 @@ def create_short_overlay(
     accent_hex="#D35400",
 ):
     """
-    Tạo khung overlay 1080x1920 (RGBA) theo chuẩn Kênh Vắt Chanh Công Nghệ (#FAF7F2):
-    - Nền vàng kem ấm #FAF7F2
-    - Header: Logo kênh + Tên kênh + Bento Title Card
-    - Cửa sổ trong suốt ở giữa (x=24..1056, y=555..1135 -> 1032x580 chuẩn 16:9)
-    - Khung Bento Phụ đề (y=1175..1545) căn giữa chính xác từng câu thoại
+    Tạo khung overlay 1080x1920 (RGBA) V2 chống Mù Mẫu Thị Giác cho Kênh Vắt Chanh Công Nghệ (#FAF7F2):
+    - Đổi màu tint Header Card, dải Top Bar và viền Khung Video theo accent_hex của từng Tập
+    - Mở rộng cửa sổ Video trung tâm lên 1040x700 (x=20..1060, y=462..1162) + Thanh Progress Bar
+    - Tự động highlight màu nổi bật cho Con số & Từ khóa trong khung Phụ đề
+    - Tự động bật thanh nhắc Video liên quan ngay ở cảnh cuối cùng của tập
     """
     W, H = 1080, 1920
     bg_cream = (250, 247, 242, 255)      # #FAF7F2
@@ -380,22 +465,25 @@ def create_short_overlay(
 
     accent_hex_clean = accent_hex.lstrip("#")
     accent_rgb = tuple(int(accent_hex_clean[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+    is_yellow_accent = accent_hex_clean.upper() == "F4C430"
+    title_accent_fg = terracotta if is_yellow_accent else accent_rgb
+    card_tinted = _blend_rgba(card_white, accent_rgb, 0.08)
 
     img = Image.new("RGBA", (W, H), bg_cream)
     draw = ImageDraw.Draw(img)
 
-    # 1. Họa tiết trang trí nhẹ ở góc trên & dưới
-    draw.ellipse((-120, -120, 220, 220), fill=(244, 196, 48, 35))
-    draw.ellipse((W - 240, H - 360, W + 120, H), fill=(124, 179, 66, 30))
+    # 1. Họa tiết trang trí góc theo màu accent của tập
+    draw.ellipse((-120, -120, 230, 230), fill=(accent_rgb[0], accent_rgb[1], accent_rgb[2], 42))
+    draw.ellipse((W - 240, H - 360, W + 120, H), fill=(124, 179, 66, 32))
 
-    # 2. Header Brand Pill (y = 115..191)
+    # 2. Header Brand Pill (y = 82..152)
     logo_path = os.path.join(RESOURCES_DIR, "logo_vi.jpg")
-    pill_w, pill_h = 520, 76
+    pill_w, pill_h = 510, 70
     pill_x = (W - pill_w) // 2
-    pill_y = 115
+    pill_y = 82
     draw.rounded_rectangle(
         (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=38,
+        radius=35,
         fill=card_white,
         outline=charcoal,
         width=3,
@@ -403,27 +491,27 @@ def create_short_overlay(
 
     if os.path.exists(logo_path):
         try:
-            logo = Image.open(logo_path).convert("RGBA").resize((56, 56), Image.LANCZOS)
-            mask = Image.new("L", (56, 56), 0)
-            ImageDraw.Draw(mask).ellipse((0, 0, 56, 56), fill=255)
-            img.paste(logo, (pill_x + 14, pill_y + 10), mask)
+            logo = Image.open(logo_path).convert("RGBA").resize((52, 52), Image.LANCZOS)
+            mask = Image.new("L", (52, 52), 0)
+            ImageDraw.Draw(mask).ellipse((0, 0, 52, 52), fill=255)
+            img.paste(logo, (pill_x + 14, pill_y + 9), mask)
         except Exception:
             pass
 
-    font_brand = _load_font(28, bold=True)
-    draw.text((pill_x + 84, pill_y + 21), "VẮT CHANH CÔNG NGHỆ", font=font_brand, fill=charcoal)
+    font_brand = _load_font(27, bold=True)
+    draw.text((pill_x + 80, pill_y + 19), "VẮT CHANH CÔNG NGHỆ", font=font_brand, fill=charcoal)
 
-    # 3. Bento Title Card (y = 220..515)
-    card_x1, card_y1, card_x2, card_y2 = 44, 220, W - 44, 515
+    # 3. Bento Title Card (y = 176..472) — Biến thiên màu theo Tập
+    card_x1, card_y1, card_x2, card_y2 = 32, 176, W - 32, 472
     draw.rounded_rectangle(
         (card_x1 + 6, card_y1 + 8, card_x2 + 6, card_y2 + 8),
         radius=28,
-        fill=(28, 25, 23, 35),
+        fill=(accent_rgb[0], accent_rgb[1], accent_rgb[2], 55),
     )
     draw.rounded_rectangle(
         (card_x1, card_y1, card_x2, card_y2),
         radius=28,
-        fill=card_white,
+        fill=card_tinted,
         outline=charcoal,
         width=4,
     )
@@ -431,13 +519,13 @@ def create_short_overlay(
     # Badge tập (hỗ trợ hiển thị Chủ đề chính + Tập, tự co chữ nếu dài)
     font_badge = _load_font(23, bold=True)
     b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 80):
+    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 76):
         font_badge = _load_font(19, bold=True)
         b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
     b_w = (b_bbox[2] - b_bbox[0]) + 44
     b_h = 46
     b_x = (W - b_w) // 2
-    b_y = card_y1 + 24
+    b_y = card_y1 + 22
     draw.rounded_rectangle(
         (b_x, b_y, b_x + b_w, b_y + b_h),
         radius=23,
@@ -445,7 +533,7 @@ def create_short_overlay(
         outline=charcoal,
         width=2,
     )
-    badge_fg = charcoal if accent_hex_clean.upper() == "F4C430" else (255, 255, 255, 255)
+    badge_fg = charcoal if is_yellow_accent else (255, 255, 255, 255)
     text_offset_y = (b_h - (b_bbox[3] - b_bbox[1])) // 2 - b_bbox[1]
     draw.text((b_x + 22, b_y + text_offset_y), badge_text, font=font_badge, fill=badge_fg)
 
@@ -453,7 +541,11 @@ def create_short_overlay(
     font_t1 = _load_font(50, bold=True)
     t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
     t1_w = t1_bbox[2] - t1_bbox[0]
-    draw.text(((W - t1_w) // 2, card_y1 + 92), title_line1, font=font_t1, fill=terracotta)
+    if t1_w > (card_x2 - card_x1 - 36):
+        font_t1 = _load_font(42, bold=True)
+        t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
+        t1_w = t1_bbox[2] - t1_bbox[0]
+    draw.text(((W - t1_w) // 2, card_y1 + 88), title_line1, font=font_t1, fill=title_accent_fg)
 
     # Title Line 2
     font_t2 = _load_font(36, bold=True)
@@ -463,18 +555,18 @@ def create_short_overlay(
         font_t2 = _load_font(32, bold=True)
         t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
         t2_w = t2_bbox[2] - t2_bbox[0]
-    draw.text(((W - t2_w) // 2, card_y1 + 168), title_line2, font=font_t2, fill=charcoal)
+    draw.text(((W - t2_w) // 2, card_y1 + 162), title_line2, font=font_t2, fill=charcoal)
 
     # Thanh nhấn 3 màu thương hiệu
     bar_w = 240
     bar_x = (W - bar_w) // 2
-    bar_y = card_y2 - 28
+    bar_y = card_y2 - 26
     draw.rounded_rectangle((bar_x, bar_y, bar_x + 75, bar_y + 8), radius=4, fill=lemon_yellow)
     draw.rounded_rectangle((bar_x + 82, bar_y, bar_x + 157, bar_y + 8), radius=4, fill=terracotta)
     draw.rounded_rectangle((bar_x + 164, bar_y, bar_x + 240, bar_y + 8), radius=4, fill=lime_green)
 
-    # 4. Cửa sổ Video 16:9 ở chính giữa (x = 24..1056, y = 555..1135 -> 1032x580)
-    vx1, vy1, vx2, vy2 = 24, 555, 1056, 1135
+    # 4. Cửa sổ Video 16:9 Tràn Ngang Tối Đa (x = 16..1064, y = 505..1095 -> 1048x590 chuẩn 16:9, không cắt mất 2 bên)
+    vx1, vy1, vx2, vy2 = 16, 505, 1064, 1095
     draw.rounded_rectangle(
         (vx1 + 6, vy1 + 8, vx2 + 6, vy2 + 8),
         radius=26,
@@ -488,8 +580,17 @@ def create_short_overlay(
         width=6,
     )
 
-    # 5. Khung Bento chứa Phụ đề (y = 1175..1545)
-    sx1, sy1, sx2, sy2 = 44, 1175, W - 44, 1545
+    # Thanh tiến độ cảnh (Scene Progress Bar) ngay dưới khung video
+    cur_sc, tot_sc = _parse_step_progress(step_label)
+    if tot_sc > 0:
+        prog_ratio = max(0.08, min(1.0, cur_sc / tot_sc))
+        pb_x1, pb_y1, pb_x2, pb_y2 = 36, 1112, W - 36, 1124
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x2, pb_y2), radius=6, fill=(230, 224, 214, 255), outline=charcoal, width=1)
+        fill_w = int((pb_x2 - pb_x1) * prog_ratio)
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x1 + fill_w, pb_y2), radius=6, fill=accent_rgb)
+
+    # 5. Khung Bento chứa Phụ đề có Highlight Từ Khóa (y = 1146..1536)
+    sx1, sy1, sx2, sy2 = 32, 1146, W - 32, 1536
     draw.rounded_rectangle(
         (sx1 + 5, sy1 + 6, sx2 + 5, sy2 + 6),
         radius=26,
@@ -503,24 +604,24 @@ def create_short_overlay(
         width=3,
     )
     # Nhãn góc trên khung phụ đề
-    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=lime_green, outline=charcoal, width=2)
+    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=accent_rgb, outline=charcoal, width=2)
     font_sub_tag = _load_font(22, bold=True)
-    draw.text((sx1 + 60, sy1 + 19), "ĐIỂM CỐT LÕI", font=font_sub_tag, fill=lime_green)
+    draw.text((sx1 + 60, sy1 + 19), "ĐIỂM CỐT LÕI", font=font_sub_tag, fill=title_accent_fg)
     if step_label:
         sp_bbox = draw.textbbox((0, 0), step_label, font=font_sub_tag)
         draw.text((sx2 - (sp_bbox[2] - sp_bbox[0]) - 32, sy1 + 19), step_label, font=font_sub_tag, fill=muted_gray)
     draw.line((sx1 + 32, sy1 + 56, sx2 - 32, sy1 + 56), fill=(230, 224, 214, 255), width=2)
 
-    # Vẽ câu thoại căn giữa hoàn hảo trong vùng (sx1+36 .. sx2-36, sy1+64 .. sy2-20)
+    # Vẽ câu thoại căn giữa + tô nổi bật Con Số & Từ Khóa
     if subtitle_text:
-        font_sub = _load_font(38, bold=True)
-        max_sub_w = (sx2 - sx1) - 72
+        font_sub = _load_font(39, bold=True)
+        max_sub_w = (sx2 - sx1) - 68
         lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
         if len(lines) > 4:
             font_sub = _load_font(34, bold=True)
             lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
 
-        line_h = 54
+        line_h = 56
         total_text_h = len(lines) * line_h
         avail_y1 = sy1 + 64
         avail_y2 = sy2 - 16
@@ -531,14 +632,38 @@ def create_short_overlay(
             lw = lb[2] - lb[0]
             lx = sx1 + ((sx2 - sx1) - lw) // 2
             ly = start_y + idx_l * line_h
-            draw.text((lx, ly), line_str, font=font_sub, fill=charcoal)
+            _draw_highlighted_subtitle_line(
+                draw,
+                line_str,
+                lx,
+                ly,
+                font_sub,
+                normal_fill=charcoal,
+                highlight_fill=terracotta,
+                pill_fill=(244, 196, 48, 85),
+            )
 
-    # 6. Footer Slogan (y = 1585..1650)
-    font_slogan = _load_font(25, bold=False)
-    slogan_txt = "“Vắt sạch thông số, giữ lại cách dùng”"
-    s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
-    s_w = s_bbox[2] - s_bbox[0]
-    draw.text(((W - s_w) // 2, 1590), slogan_txt, font=font_slogan, fill=muted_gray)
+    # 6. Footer Slogan hoặc In-Scene CTA Pill ở cảnh cuối (y = 1572..1642)
+    if tot_sc > 0 and cur_sc == tot_sc:
+        cta_w, cta_h = 860, 62
+        cta_x, cta_y = (W - cta_w) // 2, 1572
+        draw.rounded_rectangle(
+            (cta_x, cta_y, cta_x + cta_w, cta_y + cta_h),
+            radius=31,
+            fill=terracotta,
+            outline=charcoal,
+            width=3,
+        )
+        font_cta = _load_font(27, bold=True)
+        cta_txt = "▶ BẤM VIDEO LIÊN QUAN GÓC DƯỚI ĐỂ XEM FULL"
+        cb = draw.textbbox((0, 0), cta_txt, font=font_cta)
+        draw.text(((W - (cb[2] - cb[0])) // 2, cta_y + 16), cta_txt, font=font_cta, fill=(255, 255, 255, 255))
+    else:
+        font_slogan = _load_font(25, bold=False)
+        slogan_txt = "“Vắt sạch thông số, giữ lại cách dùng”"
+        s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
+        s_w = s_bbox[2] - s_bbox[0]
+        draw.text(((W - s_w) // 2, 1585), slogan_txt, font=font_slogan, fill=muted_gray)
 
     img.save(output_png, "PNG")
     return (vx1, vy1, vx2 - vx1, vy2 - vy1)
@@ -575,11 +700,11 @@ def create_short_overlay_en(
     accent_hex="#00E5FF",
 ):
     """
-    Tạo khung overlay 1080x1920 (RGBA) chuẩn Kênh Tiếng Anh Squeezing Tech (#0B132B):
-    - Nền xanh đen thẫm #0B132B
-    - Header: Biểu tượng năng lượng tròn + SQUEEZING TECH + Bento Title Card
-    - Cửa sổ trong suốt ở giữa (x=24..1056, y=555..1135 -> 1032x580 chuẩn 16:9)
-    - Khung Bento Phụ đề (y=1175..1545) căn giữa chính xác từng câu thoại
+    Tạo khung overlay 1080x1920 (RGBA) V2 chống Mù Mẫu Thị Giác cho Kênh Squeezing Tech (#0B132B):
+    - Đổi màu viền/tint Header Card và Khung Video theo accent_hex của từng Tập
+    - Mở rộng cửa sổ Video trung tâm lên 1040x700 (x=20..1060, y=462..1162) + Thanh Progress Bar
+    - Tự động highlight màu nổi bật cho Con số & Từ khóa trong khung Phụ đề
+    - Tự động bật thanh nhắc Related Video ngay ở cảnh cuối cùng của tập
     """
     W, H = 1080, 1920
     bg_navy = (11, 19, 43, 255)          # #0B132B
@@ -592,32 +717,33 @@ def create_short_overlay_en(
 
     accent_hex_clean = accent_hex.lstrip("#")
     accent_rgb = tuple(int(accent_hex_clean[i:i+2], 16) for i in (0, 2, 4)) + (255,)
+    card_tinted = _blend_rgba(card_slate, accent_rgb, 0.14)
 
     img = Image.new("RGBA", (W, H), bg_navy)
     draw = ImageDraw.Draw(img)
 
     # 1. Họa tiết quầng sáng công nghệ ở góc trên & dưới
-    draw.ellipse((-120, -120, 240, 240), fill=(13, 42, 76, 255))
+    draw.ellipse((-120, -120, 240, 240), fill=(accent_rgb[0] // 4, accent_rgb[1] // 4, accent_rgb[2] // 4, 255))
     draw.ellipse((W - 240, H - 360, W + 120, H), fill=(18, 46, 52, 255))
 
-    # 2. Header Brand Pill (y = 115..191)
-    pill_w, pill_h = 460, 76
+    # 2. Header Brand Pill (y = 82..152)
+    pill_w, pill_h = 460, 70
     pill_x = (W - pill_w) // 2
-    pill_y = 115
+    pill_y = 82
     draw.rounded_rectangle(
         (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=38,
+        radius=35,
         fill=card_slate,
         outline=elec_cyan,
         width=3,
     )
-    _draw_squeezing_tech_emblem(draw, pill_x + 44, pill_y + 38, r=26)
+    _draw_squeezing_tech_emblem(draw, pill_x + 44, pill_y + 35, r=24)
 
-    font_brand = _load_font(30, bold=True)
-    draw.text((pill_x + 86, pill_y + 20), "SQUEEZING TECH", font=font_brand, fill=elec_cyan)
+    font_brand = _load_font(29, bold=True)
+    draw.text((pill_x + 84, pill_y + 18), "SQUEEZING TECH", font=font_brand, fill=elec_cyan)
 
-    # 3. Bento Title Card (y = 220..515)
-    card_x1, card_y1, card_x2, card_y2 = 44, 220, W - 44, 515
+    # 3. Bento Title Card (y = 176..472) — Biến thiên màu theo Tập
+    card_x1, card_y1, card_x2, card_y2 = 32, 176, W - 32, 472
     draw.rounded_rectangle(
         (card_x1 + 6, card_y1 + 8, card_x2 + 6, card_y2 + 8),
         radius=28,
@@ -626,21 +752,21 @@ def create_short_overlay_en(
     draw.rounded_rectangle(
         (card_x1, card_y1, card_x2, card_y2),
         radius=28,
-        fill=card_slate,
-        outline=elec_cyan,
+        fill=card_tinted,
+        outline=accent_rgb,
         width=3,
     )
 
     # Episode Badge (hỗ trợ hiển thị Main Topic + Episode, tự co chữ nếu dài)
     font_badge = _load_font(22, bold=True)
     b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 80):
+    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 76):
         font_badge = _load_font(19, bold=True)
         b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
     b_w = (b_bbox[2] - b_bbox[0]) + 44
     b_h = 46
     b_x = (W - b_w) // 2
-    b_y = card_y1 + 24
+    b_y = card_y1 + 22
     draw.rounded_rectangle(
         (b_x, b_y, b_x + b_w, b_y + b_h),
         radius=23,
@@ -659,7 +785,7 @@ def create_short_overlay_en(
         font_t1 = _load_font(40, bold=True)
         t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
         t1_w = t1_bbox[2] - t1_bbox[0]
-    draw.text(((W - t1_w) // 2, card_y1 + 92), title_line1, font=font_t1, fill=neon_lime)
+    draw.text(((W - t1_w) // 2, card_y1 + 88), title_line1, font=font_t1, fill=accent_rgb)
 
     # Title Line 2
     font_t2 = _load_font(34, bold=True)
@@ -669,18 +795,18 @@ def create_short_overlay_en(
         font_t2 = _load_font(30, bold=True)
         t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
         t2_w = t2_bbox[2] - t2_bbox[0]
-    draw.text(((W - t2_w) // 2, card_y1 + 168), title_line2, font=font_t2, fill=white_text)
+    draw.text(((W - t2_w) // 2, card_y1 + 162), title_line2, font=font_t2, fill=white_text)
 
     # Thanh nhấn 3 màu thương hiệu
     bar_w = 240
     bar_x = (W - bar_w) // 2
-    bar_y = card_y2 - 28
+    bar_y = card_y2 - 26
     draw.rounded_rectangle((bar_x, bar_y, bar_x + 75, bar_y + 8), radius=4, fill=neon_lime)
     draw.rounded_rectangle((bar_x + 82, bar_y, bar_x + 157, bar_y + 8), radius=4, fill=elec_cyan)
     draw.rounded_rectangle((bar_x + 164, bar_y, bar_x + 240, bar_y + 8), radius=4, fill=amber)
 
-    # 4. Cửa sổ Video 16:9 ở chính giữa (x = 24..1056, y = 555..1135 -> 1032x580)
-    vx1, vy1, vx2, vy2 = 24, 555, 1056, 1135
+    # 4. Cửa sổ Video 16:9 Tràn Ngang Tối Đa (x = 16..1064, y = 505..1095 -> 1048x590 chuẩn 16:9, không cắt mất 2 bên)
+    vx1, vy1, vx2, vy2 = 16, 505, 1064, 1095
     draw.rounded_rectangle(
         (vx1 + 6, vy1 + 8, vx2 + 6, vy2 + 8),
         radius=26,
@@ -690,12 +816,21 @@ def create_short_overlay_en(
         (vx1, vy1, vx2, vy2),
         radius=24,
         fill=(0, 0, 0, 0),
-        outline=elec_cyan,
+        outline=accent_rgb,
         width=5,
     )
 
-    # 5. Khung Bento chứa Phụ đề (y = 1175..1545)
-    sx1, sy1, sx2, sy2 = 44, 1175, W - 44, 1545
+    # Thanh tiến độ cảnh (Scene Progress Bar) ngay dưới khung video
+    cur_sc, tot_sc = _parse_step_progress(step_label)
+    if tot_sc > 0:
+        prog_ratio = max(0.08, min(1.0, cur_sc / tot_sc))
+        pb_x1, pb_y1, pb_x2, pb_y2 = 36, 1112, W - 36, 1124
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x2, pb_y2), radius=6, fill=(19, 31, 66, 255), outline=elec_cyan, width=1)
+        fill_w = int((pb_x2 - pb_x1) * prog_ratio)
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x1 + fill_w, pb_y2), radius=6, fill=accent_rgb)
+
+    # 5. Khung Bento chứa Phụ đề có Highlight Từ Khóa (y = 1146..1536)
+    sx1, sy1, sx2, sy2 = 32, 1146, W - 32, 1536
     draw.rounded_rectangle(
         (sx1 + 5, sy1 + 6, sx2 + 5, sy2 + 6),
         radius=26,
@@ -709,24 +844,24 @@ def create_short_overlay_en(
         width=3,
     )
     # Nhãn góc trên khung phụ đề
-    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=neon_lime)
+    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=accent_rgb)
     font_sub_tag = _load_font(22, bold=True)
-    draw.text((sx1 + 60, sy1 + 19), "KEY TAKEAWAY", font=font_sub_tag, fill=neon_lime)
+    draw.text((sx1 + 60, sy1 + 19), "KEY TAKEAWAY", font=font_sub_tag, fill=accent_rgb)
     if step_label:
         sp_bbox = draw.textbbox((0, 0), step_label, font=font_sub_tag)
         draw.text((sx2 - (sp_bbox[2] - sp_bbox[0]) - 32, sy1 + 19), step_label, font=font_sub_tag, fill=muted_slate)
     draw.line((sx1 + 32, sy1 + 56, sx2 - 32, sy1 + 56), fill=(38, 56, 105, 255), width=2)
 
-    # Vẽ câu thoại căn giữa hoàn hảo
+    # Vẽ câu thoại căn giữa + tô nổi bật Con Số & Từ Khóa
     if subtitle_text:
-        font_sub = _load_font(38, bold=True)
-        max_sub_w = (sx2 - sx1) - 72
+        font_sub = _load_font(39, bold=True)
+        max_sub_w = (sx2 - sx1) - 68
         lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
         if len(lines) > 4:
             font_sub = _load_font(34, bold=True)
             lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
 
-        line_h = 54
+        line_h = 56
         total_text_h = len(lines) * line_h
         avail_y1 = sy1 + 64
         avail_y2 = sy2 - 16
@@ -737,14 +872,38 @@ def create_short_overlay_en(
             lw = lb[2] - lb[0]
             lx = sx1 + ((sx2 - sx1) - lw) // 2
             ly = start_y + idx_l * line_h
-            draw.text((lx, ly), line_str, font=font_sub, fill=white_text)
+            _draw_highlighted_subtitle_line(
+                draw,
+                line_str,
+                lx,
+                ly,
+                font_sub,
+                normal_fill=white_text,
+                highlight_fill=neon_lime,
+                pill_fill=(118, 255, 3, 38),
+            )
 
-    # 6. Footer Slogan (y = 1585..1650)
-    font_slogan = _load_font(25, bold=False)
-    slogan_txt = "“Extracting Value from Everyday Tech”"
-    s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
-    s_w = s_bbox[2] - s_bbox[0]
-    draw.text(((W - s_w) // 2, 1590), slogan_txt, font=font_slogan, fill=muted_slate)
+    # 6. Footer Slogan hoặc In-Scene CTA Pill ở cảnh cuối (y = 1572..1642)
+    if tot_sc > 0 and cur_sc == tot_sc:
+        cta_w, cta_h = 860, 62
+        cta_x, cta_y = (W - cta_w) // 2, 1572
+        draw.rounded_rectangle(
+            (cta_x, cta_y, cta_x + cta_w, cta_y + cta_h),
+            radius=31,
+            fill=neon_lime,
+            outline=bg_navy,
+            width=3,
+        )
+        font_cta = _load_font(26, bold=True)
+        cta_txt = "▶ TAP RELATED VIDEO BELOW FOR FULL BREAKDOWN"
+        cb = draw.textbbox((0, 0), cta_txt, font=font_cta)
+        draw.text(((W - (cb[2] - cb[0])) // 2, cta_y + 17), cta_txt, font=font_cta, fill=bg_navy)
+    else:
+        font_slogan = _load_font(25, bold=False)
+        slogan_txt = "“Extracting Value from Everyday Tech”"
+        s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
+        s_w = s_bbox[2] - s_bbox[0]
+        draw.text(((W - s_w) // 2, 1585), slogan_txt, font=font_slogan, fill=muted_slate)
 
     img.save(output_png, "PNG")
     return (vx1, vy1, vx2 - vx1, vy2 - vy1)
@@ -780,7 +939,7 @@ def _render_short_scene(order_idx, media_path, audio_path, dur, overlay_png, box
         ]
     else:
         total_frames = max(1, int(dur * fps))
-        max_zoom = 1.12
+        max_zoom = 1.15
         step = (max_zoom - 1.00) / max(1, total_frames)
         if order_idx % 2 == 1:
             zoom_expr = f"min(zoom+{step:.6f},{max_zoom})"

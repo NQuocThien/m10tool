@@ -15,7 +15,7 @@
 Khi viết prompt cho các cảnh giải thích hoặc so sánh, lồng ghép tinh tế các yếu tố nhận diện từ Logo & Banner kênh:
 - **Biểu tượng nút nguồn quả chanh**: `stylized lemon power emblem` hoặc `subtle lemon tech badge detail`.
 - **Lá mầm / Sóng công nghệ**: `sprout leaf accent` hoặc `lime green Wi-Fi wave motif`.
-- **Mascot (Cảnh Hook / Mở đầu / CTA cuối video)**: `tiny cute nerdy lemon mascot wearing round glasses`.
+- **Mascot (BẮT BUỘC có chuyển động trong MỌI cảnh `[VIDEO]` + Mở đầu / CTA cuối video)**: `a cute animated nerdy lemon mascot wearing round glasses` đang cử động sinh động (chỉ tay, bật công tắc, quạt khói, ôm heo đất, giơ ngón cái...). Mọi câu prompt trong `prompts_vi_video.txt` bắt buộc phải có linh vật chanh chuyển động tương tác với bối cảnh.
 - **Từ khóa bắt buộc cho Xe Máy Điện (Tránh vẽ nhầm xe trượt Kick Scooter)**: Luôn dùng `sit-down Vespa-style electric moped motorbike with padded saddle seat and front leg shield` (hoặc `electric motorbike`), kèm hậu tố cấm `no kick scooter, no stand-up scooter` và `--no kick scooter, stand-up scooter, push scooter`. **TUYỆT ĐỐI KHÔNG** viết trống không là `electric scooter` (AI phương Tây mặc định hiểu là xe trượt đứng Xiaomi).
 - **Bố cục**: Bento card bo góc nhẹ nhàng hoặc mặt cắt 2D trực quan (`modern editorial tech infographic`).
 

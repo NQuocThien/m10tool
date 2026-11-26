@@ -1,58 +1,50 @@
-# Quy Chuẩn Viết Kịch Bản Video Dài & Cụm Độc Lập Tách Shorts (V2 - High Retention)
+# Quy Chuẩn Viết Kịch Bản Video Dài & 4 Cụm Hook Tách Shorts (V3 - Anti-Swipe)
 
-Áp dụng cho cả 2 kênh **Vắt Chanh Công Nghệ** (`script_vi.txt`) và **Squeezing Tech** (`script_en.txt`). Tổng độ dài: **28–32 câu** (~4–6 giây/cảnh).
+Áp dụng cho **Vắt Chanh Công Nghệ** (`script_vi.txt`) và **Squeezing Tech** (`script_en.txt`). Tổng độ dài: **28–32 câu** (~4–5.5 giây/cảnh).
 
-## 1. Mở Đầu Giữ Chân 3 Giây Đầu — Công Thức "Con Số Sốc -> Bóc Mẽ -> Open Loop" (Câu 01–03)
+## 1. Mở Đầu Giữ Chân 3 Giây Đầu — "Con Số Sốc -> Bóc Mẽ -> Open Loop" (Câu 01–03)
 
-**TUYỆT ĐỐI CẤM** mở đầu bằng câu hỏi sáo rỗng (*"Chắc hẳn bạn từng..."*, *"Bạn có bao giờ tự hỏi..."*) hoặc chào hỏi dài dòng làm mất 5 giây vàng đầu video:
-- **Câu 01 (Đập thẳng Con số sốc / Nghịch lý trực diện)**: Nêu ngay con số đối lập hoặc sự thật gây giật mình trong 3 giây đầu.
-  - *VI*: `"Hãng công bố xe điện đi 200 km một lần sạc, nhưng ra đường thật đi chưa nổi 120 km đã báo đèn đỏ."`
-  - *EN*: `"The brochure promises 200 kilometers per charge, yet real city streets drain that battery dead at barely 120."`
-- **Câu 02 (Bóc mẽ nguyên nhân cốt lõi)**: Giải tỏa nghi ngờ và chỉ thẳng nút thắt đằng sau con số.
-  - *VI*: `"Không phải pin xe bạn bị lỗi ảo. Thủ phạm nằm ở bài đo thử trong phòng kín khác xa mặt đường giờ cao điểm."`
-  - *EN*: `"Your battery isn't defective. The gap comes from a sterile factory test that looks nothing like rush-hour asphalt."`
-- **Câu 03 (Cài Open Loop giữ chân đến cuối video)**: Hứa hẹn một công thức nhẩm nhanh, mẹo thực chiến hoặc cú twist ở cuối video.
-  - *VI*: `"Trong 3 phút tới, cùng Vắt Chanh Công Nghệ điểm mặt 5 kẻ cắp pin âm thầm — và công thức nhẩm quãng đường thật chỉ trong 3 giây ở cuối video."`
-  - *EN*: `"In the next 3 minutes on Squeezing Tech, we'll expose the 5 hidden range killers—plus a 3-second formula at the end to calculate real range before you buy."`
+**CẤM** mở đầu bằng câu hỏi sáo rỗng (*"Chắc hẳn bạn từng..."*, *"Bạn có bao giờ tự hỏi..."*) hoặc chào hỏi dài dòng:
+- **Câu 01 (Con số sốc / Nghịch lý mất tiền trực diện — Dùng làm Hook Mở Màn Tập 1 Shorts)**:
+  - *VI*: `"Một bộ ắc quy Graphene giá chỉ 4 triệu so với 12 triệu của pin Lithium — nhưng sau 5 năm chạy xe, người mua rẻ lại tốn gấp đôi tiền."`
+  - *EN*: `"A graphene lead-acid pack costs just $160 versus $480 for lithium — yet over five years, the cheap buyer pays double."`
+- **Câu 02 (Bóc mẽ nguyên nhân cốt lõi)**:
+  - *VI*: `"Cái bẫy nằm ở chỗ người mua chỉ nhìn giá lúc dắt xe khỏi tiệm, mà bỏ qua vòng đời sạc và khối lượng chết đè lên động cơ."`
+- **Câu 03 (Cài Open Loop giữ chân đến cuối video)**:
+  - *VI*: `"Trong 3 phút tới, cùng Vắt Chanh Công Nghệ bóc trần 4 sự thật bên trong vỏ bình — kèm quy tắc nhẩm 3 giây ở cuối video để không mất tiền oan."`
 
-## 2. Nhịp Câu & Cách Viết Số Tối Ưu Cho Giọng Gemini TTS (`voice_5mxlq1k9luls` / `Charon`)
+## 2. Nhịp Câu & Định Dạng Con Số Cho Gemini TTS + Highlight Phụ Đề Shorts
 
-1. **Xen kẽ câu ngắn đanh thép & ngắt nhịp trong câu**:
-   - Không viết 30 câu dài đều nhau 18–22 từ theo cấu trúc *"Vế A..., giúp Vế B..."*.
-   - Dùng dấu chấm (`.`) hoặc dấu gạch ngang (` — `) ngay trong 1 dòng thoại để tạo nhịp nghỉ có sức nặng:
-     - *Ví dụ*: `"Không ai chạy nước rút như thế — trừ khi đang đuổi theo một gã khổng lồ."`
-     - *Ví dụ*: `"Tổng cộng: 4 hệ thống mới chỉ trong 1 năm. Chưa từng có tiền lệ."`
-2. **Viết con số bằng chữ số + đơn vị chuẩn (`200 km`, `65%`, `3.000 chu kỳ`)**:
-   - **KHÔNG** viết chữ dài dòng (*"hai trăm cây số"*, *"sáu mươi lăm phần trăm"*).
-   - Gemini 3.8 TTS tự đọc chuẩn xác số + đơn vị tiếng Việt/Anh, đồng thời phụ đề SRT trên màn hình hiển thị con số giúp mắt người xem bắt điểm nhấn ngay lập tức.
+1. **Xen kẽ câu ngắn đanh thép & dấu ngắt nhịp (`.`, ` — `)**:
+   - Không viết 30 câu đều đều 20 từ. Dùng ` — ` hoặc `.` giữa câu để giọng TTS (`voice_5mxlq1k9luls` / `Charon`) tạo điểm nhấn.
+2. **Viết mọi con số bằng Chữ Số + Đơn Vị Chuẩn (`200 km`, `65%`, `150 triệu`, `50°C`, `3.000 chu kỳ`)**:
+   - **CẤM** viết chữ (*"hai trăm cây số"*, *"một trăm năm mươi triệu"*).
+   - Engine dựng Shorts (`make_shorts.py`) sẽ tự động phát hiện và **tô màu nổi bật (Highlight Accent)** cho các cụm chữ số trên khung phụ đề để hút mắt người xem ngay lập tức.
 
-## 3. Thân Bài — Thiết Kế Cụm Độc Lập Để Tách Shorts (Câu 04 đến N-3)
+## 3. Thân Bài 4 Cụm Độc Lập — Công Thức "Hook Giật Mình Đầu Mỗi Cụm" (Câu 04 đến N-3)
 
-Một video dài sẽ được tách thành **3–4 tập YouTube Shorts**. Để người xem bất kỳ tập Short nào cũng hiểu ngay **chủ đề chính của video là gì**:
-- Chia thân bài thành **3–4 cụm chủ đề nhỏ** (mỗi cụm 6–7 câu, có ít nhất 1 con số so sánh cụ thể như `gấp 3 lần`, `20%`, `2 tuần/lần`).
-- **QUY TẮC SỐNG CÒN ĐẦU MỖI CỤM (Self-Contained Topic Anchor)**:
-  - **CẤM** mở đầu cụm bằng từ nối phụ thuộc hoặc số thứ tự cụt lủn: *"Nhưng..."*, *"Thủ phạm thứ hai là..."*, *"Thứ ba là..."*, *"Tiếp theo là..."*.
-  - **BẮT BUỘC** mở đầu mỗi cụm bằng **1 câu hoàn chỉnh có chứa Chủ Đề Chính + Khía Cạnh Cụm**:
-    - *Sai*: `"Thủ phạm thứ tư ít ai ngờ tới chính là đôi lốp xe bị non hơi."` (Khi cắt sang Tập 3 Shorts, người xem không biết đang nói về xe gì).
-    - *Đúng*: `"Trên một chiếc xe máy điện, đôi lốp non hơi chính là kẻ cắp quãng đường âm thầm mà 9/10 người đi xe bỏ quên."`
+Một video dài cắt thành **4 tập YouTube Shorts**. Cảnh đầu tiên của mỗi tập quyết định **tỷ lệ dừng lại xem (Viewed vs. Swiped Away > 75%)**:
 
-## 4. Lời Kết Thực Dụng — Công Thức 3 Nhịp "Trả Open Loop - Trò Chuyện - Chào Kết" (3 Câu Cuối)
+### Quy Tắc Sống Còn Cho Câu Đầu Tiên Của Mỗi Cụm (Cảnh `04`, `10`, `16`, `22`):
+1. **CẤM văn phong chuyển đoạn bài giảng / mục lục học thuật**:
+   - **CẤM TUYỆT ĐỐI**: *"Xét về bài toán..."*, *"Với lộ trình..."*, *"Trong bài toán chọn mua..."*, *"Điểm khác biệt rõ nhất nằm ở..."*, *"Khi mua xe..., lầm tưởng lớn nhất là..."*, *"Thủ phạm thứ hai là..."*, *"Nhưng..."*.
+   - Những câu trên làm người lướt Shorts (khi gặp ngẫu nhiên Tập 2, 3, 4) cảm giác đang nghe giữa chừng một bài thuyết trình khô khan và **vuốt bỏ ngay ở giây thứ 2**.
+2. **BẮT BUỘC mở đầu mỗi cụm bằng công thức `CON SỐ SỐC / HẬU QUẢ MẤT TIỀN + CHỦ ĐỀ CHÍNH + GÓC NHÌN`**:
+   - *Sai (Văn bài giảng — Rớt view)*: `"Xét về bài toán giá thành pin mật độ cao 500 Wh/kg, nguyên liệu chế tạo chính là bức tường ngăn cản pin thể rắn giảm giá trước năm 2030."`
+   - *Đúng (Hook Shorts 3s — Giữ chân)*: `"Đắt gấp 20 lần pin thường và tự bốc khí độc mùi trứng thối khi gặp ẩm — đó là lý do pin thể rắn 500 Wh/kg không thể có giá rẻ trước năm 2030!"`
+   - *Sai (Chậm — Rớt view)*: `"Trên cùng một chiếc xe máy điện, trọng lượng của bộ ắc quy dưới sàn để chân đang âm thầm ăn bớt từng cây số quãng đường của bạn."`
+   - *Đúng (Đập thẳng số 40 kg vs 10 kg ngay câu đầu)*: `"Nặng tới 40 kg so với 10 kg của pin Lithium — bộ ắc quy chì dưới sàn xe máy điện giống như bắt bạn đèo thêm bao gạo 30 kg mỗi ngày!"`
+3. **BẮT BUỘC gán nhãn `[VIDEO] (.mp4)` cho Câu Đầu Mỗi Cụm**:
+   - Các câu mở đầu Cụm 1, 2, 3, 4 (hoặc Cảnh `01` cho Tập 1 và Câu đầu Cụm 2, 3, 4 cho Tập 2, 3, 4) **bắt buộc phải nằm trong `prompts_{vi,en}_video.txt`** để render thành clip hoạt họa `.mp4`.
+   - **CẤM** để bất kỳ tập Short nào mở đầu bằng ảnh tĩnh `.jpg`.
 
-- **Câu N-2 (Trả Open Loop / Đúc kết bỏ túi)**: Chốt hạ công thức hoặc nguyên tắc thực dụng ngắn gọn nhất.
-  - *VI*: `"Nhớ quy tắc vàng này: lấy quãng đường hãng công bố nhân 65% là ra số cây số thực tế bạn cầm chắc trong tay."`
-  - *EN*: `"Lock in this golden rule: multiply the brochure range by 65%, and you get the real-world kilometers you can actually count on."`
-- **Câu N-1 (Câu hỏi chạm trải nghiệm thật)**: Khơi gợi bình luận bằng con số thực tế của người xem.
-  - *VI*: `"Chiếc xe bạn đang đi hãng công bố bao nhiêu km, và thực tế một lần sạc chạy được bao nhiêu?"`
-  - *EN*: `"What range did your brochure promise, and how many kilometers do you actually get per charge?"`
-- **Câu N (Lời chào thương hiệu & Slogan)**:
-  - *VI*: `"Để lại con số của bạn dưới bình luận, và hẹn gặp lại ở Vắt Chanh Công Nghệ — vắt sạch thông số, giữ lại cách dùng!"`
-  - *EN*: `"Drop your numbers in the comments, and subscribe to Squeezing Tech — extracting real value from everyday tech!"`
+## 4. Lời Kết 3 Nhịp (3 Câu Cuối)
 
-## 5. Nhịp Điệu Thị Giác 3 Dạng Cảnh (Visual Scene Archetypes)
+- **Câu N-2 (Trả Open Loop / Quy tắc bỏ túi có con số — `[IMG]` Bento Card)**: Chốt công thức ngắn gọn nhất (dùng làm cảnh kết cho Tập 4 Shorts).
+- **Câu N-1 (Câu hỏi khảo sát con số thực tế — `[VIDEO]` riêng theo đúng chủ đề)**: Khơi gợi bình luận. **BẮT BUỘC viết prompt `[VIDEO]` mới cho cảnh 29 (`N-1`)** có mặt thiết bị/chủ đề chính của video cùng Mascot Chanh chuyển động (tuyệt đối không copy file `29_mascot_survey.mp4` hình xe máy điện cũ sang chủ đề khác).
+- **Câu N (Lời chào thương hiệu & Slogan — `[VIDEO]` riêng theo đúng chủ đề)**: **BẮT BUỘC viết prompt `[VIDEO]` mới cho cảnh 30 (`N`)** có mặt thiết bị/chủ đề chính của video + biểu tượng nút nguồn chanh + Mascot Chanh vẫy tay chào (tuyệt đối không copy file `30_mascot_outro.mp4` khác chủ đề).
 
-Khi chuyển từ kịch bản sang `prompts_vi.txt` / `prompts_en.txt`:
-1. **Khóa Đồng Bộ Vật Thể & Mascot (Object & Mascot Continuity)**: Các cảnh liền kề nói về cùng chiếc xe hoặc viên pin phải giữ nguyên kiểu dáng/màu sắc khung viền; Mascot quả chanh đeo kính (`tiny cute nerdy lemon mascot wearing round glasses`) xuất hiện ở cảnh Mở đầu (01–03) và Lời kết (3 câu cuối).
-2. **Xen kẽ 3 dạng bố cục cảnh (tránh nhàm chán suốt 30 cảnh)**:
-   - **Dạng A - Cảnh Tình Huống Đời Thường (Real-Life Context)**: Xe chạy trên phố, dừng đèn đỏ, leo dốc hầm chung cư, cắm sạc tại nhà.
-   - **Dạng B - Cảnh Mặt Cắt / Ẩn Dụ Trực Quan (Cutaway & Metaphor)**: Pháo đài bê tông vs ngăn kéo trượt, đẩy tảng đá đứng yên, mặt cắt lốp xe.
-   - **Dạng C - Cảnh Bảng Tổng Kết Bento (Bento Infographic Card)**: Khi liệt kê 3–4 mẹo hoặc so sánh chốt hạ, dùng bố cục 3–4 thẻ Bento bo góc (`3-4 rounded Bento UI cards with minimalist flat icons`).
+## 5. Nhịp Điệu Thị Giác 3 Dạng Cảnh (Visual Archetypes)
+1. **Dạng A - Tình huống đời thường / Nỗi đau trực diện** (Ưu tiên làm cảnh `[VIDEO]` mở đầu cụm).
+2. **Dạng B - Mặt cắt giải phẫu / Ẩn dụ vật lý** (Cưa đôi vỏ bình, cốc giác hơi hút nước, bao gạo 30 kg).
+3. **Dạng C - Bảng tổng kết Bento Card** (Chốt quy tắc cuối cụm).

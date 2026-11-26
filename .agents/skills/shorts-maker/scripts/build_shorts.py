@@ -114,6 +114,76 @@ def load_and_validate_configs(config_path, total_scenes):
     return configs
 
 
+_WEAK_OPENER_PREFIXES = (
+    "xét về bài toán",
+    "với lộ trình",
+    "trong bài toán",
+    "điểm khác biệt rõ nhất",
+    "khi mua xe máy điện, lầm tưởng",
+    "trên cùng một chiếc xe",
+    "thủ phạm thứ",
+    "tiếp theo là",
+)
+
+
+def audit_shorts_retention_risks(configs, all_lines, all_media):
+    """Detect retention killers: static .jpg openers, duplicated scene[0], 100% static episodes, or weak verbal hooks."""
+    vid_exts = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
+    warnings = []
+    seen_openers = {}
+
+    for cfg in configs:
+        ep_id = cfg["id"]
+        scenes = cfg["scenes"]
+        sc0 = scenes[0]
+
+        # 1. Duplicate opening scene across episodes
+        if sc0 in seen_openers:
+            warnings.append(
+                f"[RETENTION RISK] {ep_id}: Scene #{sc0:02d} duplicates opener of '{seen_openers[sc0]}'. "
+                f"Returning viewers will think it is a repost and swipe away!"
+            )
+        else:
+            seen_openers[sc0] = ep_id
+
+        # 2. Opening scene is a static image instead of animated .mp4
+        if 1 <= sc0 <= len(all_media):
+            media0 = all_media[sc0 - 1]
+            ext0 = os.path.splitext(media0)[1].lower()
+            if ext0 not in vid_exts:
+                warnings.append(
+                    f"[RETENTION RISK] {ep_id}: Opening scene #{sc0:02d} ({os.path.basename(media0)}) is a STATIC image. "
+                    f"First 3s of every Short should be an animated [VIDEO] .mp4 clip!"
+                )
+
+        # 3. 100% static slideshow check
+        vid_count = sum(
+            1 for sc in scenes
+            if 1 <= sc <= len(all_media) and os.path.splitext(all_media[sc - 1])[1].lower() in vid_exts
+        )
+        if vid_count == 0:
+            warnings.append(
+                f"[RETENTION RISK] {ep_id}: 0 animated .mp4 clips across scenes {scenes} (100% static images)!"
+            )
+
+        # 4. Weak academic opener or missing concrete numbers in first spoken line
+        if 1 <= sc0 <= len(all_lines):
+            first_line = all_lines[sc0 - 1].strip()
+            lower_line = first_line.lower()
+            if any(lower_line.startswith(p) for p in _WEAK_OPENER_PREFIXES):
+                warnings.append(
+                    f"[RETENTION RISK] {ep_id}: Scene #{sc0:02d} opens with academic transition ('{first_line[:48]}...'). "
+                    f"Use a shocking number or direct pain hook!"
+                )
+            elif not any(ch.isdigit() for ch in first_line):
+                warnings.append(
+                    f"[RETENTION TIP] {ep_id}: Opening scene #{sc0:02d} has no concrete number ('{first_line[:48]}...'). "
+                    f"Adding a number in the first 3s boosts stop-scroll rate."
+                )
+
+    return warnings
+
+
 def format_overlay_badge(cfg, ep_idx, total_eps, lang="vi"):
     """Format badge text so viewer immediately sees Main Topic + Episode progress."""
     raw_badge = cfg["badge"].strip()
@@ -252,10 +322,14 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
 
     cta_audio = os.path.join(RESOURCES_DIR, f"shorts_cta_{lang}.mp3")
     if os.path.isfile(cta_audio) and os.path.getsize(cta_audio) > 0:
-        cta_dur = max(2.0, min(4.5, _probe_audio_duration(cta_audio)))
+        punchy_cta = os.path.join(temp_dir, f"punchy_cta_{lang}.mp3")
+        _prepare_punchy_short_audio(cta_audio, punchy_cta, speed=1.22, sfx_path=None)
+        cta_use_audio = punchy_cta if os.path.isfile(punchy_cta) else cta_audio
+        cta_dur = max(1.5, min(2.2, _probe_audio_duration(cta_use_audio)))
         has_voice = True
     else:
-        cta_dur = 2.2
+        cta_use_audio = cta_audio
+        cta_dur = 1.6
         has_voice = False
 
     total_frames = max(1, int(cta_dur * fps))
@@ -270,7 +344,7 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
         cmd = [
             FFMPEG_PATH, "-y",
             "-loop", "1", "-t", f"{cta_dur:.3f}", "-i", cta_png,
-            "-i", cta_audio,
+            "-i", cta_use_audio,
             "-vf", vf,
             "-map", "0:v:0", "-map", "1:a:0",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
@@ -297,7 +371,7 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     return outro_mp4, cta_dur
 
 
-def build_shorts(proj_name, lang, paths, configs):
+def build_shorts(proj_name, lang, paths, configs, skip_outro=False):
     """Render vertical 9:16 Short videos for all configured episodes."""
     shorts_out_dir = paths["shorts_out_dir"]
     os.makedirs(shorts_out_dir, exist_ok=True)
@@ -378,9 +452,12 @@ def build_shorts(proj_name, lang, paths, configs):
 
                 clip_files = [fut.result() for _, _, _, fut in tasks]
 
-            # Append ~2.2s Outro CTA hook pointing to full video in pinned comment
-            outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, DEFAULT_FPS)
-            clip_files.append(outro_mp4)
+            # Append fast ~1.8s Outro CTA hook unless skip_outro is set for Seamless Loop
+            if skip_outro or cfg.get("skip_outro", False):
+                outro_dur = 0.0
+            else:
+                outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, DEFAULT_FPS)
+                clip_files.append(outro_mp4)
 
             concat_txt = os.path.join(temp_dir, "concat.txt")
             with open(concat_txt, "w", encoding="utf-8") as f_cat:
@@ -523,6 +600,7 @@ def main():
     parser.add_argument("--media-dir", default=None, help="Optional override for media directory")
     parser.add_argument("--audio-dir", default=None, help="Optional override for audio directory")
     parser.add_argument("--meta-only", action="store_true", help="Only render thumbnails and metadata")
+    parser.add_argument("--no-outro", action="store_true", help="Skip separate outro card for 100% seamless loop")
     parser.add_argument("--dry-run", action="store_true", help="Validate paths and config without rendering")
     args = parser.parse_args()
 
@@ -535,13 +613,19 @@ def main():
     configs = load_and_validate_configs(paths["config_path"], len(all_lines))
     print(f"[VALIDATED] {args.project} ({args.lang}): {len(all_lines)} scenes, {len(configs)} shorts")
 
+    retention_warnings = audit_shorts_retention_risks(configs, all_lines, all_media)
+    for w in retention_warnings:
+        print(f"  ! {w}")
+
     if args.dry_run:
         for cfg in configs:
-            print(f"  - {cfg['id']}: scenes={cfg['scenes']}, thumb={cfg['thumb_scene']}")
+            sc0 = cfg["scenes"][0]
+            m0 = os.path.basename(all_media[sc0 - 1])
+            print(f"  - {cfg['id']}: scenes={cfg['scenes']} (opener=#{sc0:02d} {m0}), thumb={cfg['thumb_scene']}")
         return
 
     if not args.meta_only:
-        build_shorts(args.project, args.lang, paths, configs)
+        build_shorts(args.project, args.lang, paths, configs, skip_outro=args.no_outro)
     generate_metadata_and_thumbnails(args.project, args.lang, paths, configs)
 
 
