@@ -26,7 +26,30 @@ SCENE_TAIL_PAD_SEC = 0.18
 # Video Settings
 DEFAULT_FPS = 25
 DEFAULT_RESOLUTION = (1920, 1080)
-DEFAULT_MAX_ZOOM = 1.03  # Subtle 3% Ken Burns zoom
+DEFAULT_MAX_ZOOM = 1.10  # Dynamic 10% Ken Burns motion for static 2D scenes
+
+# Shorts V3 Retention Settings
+SHORT_MAX_DURATION_SEC = 38.0
+SHORT_IDEAL_MAX_SCENES = 7
+SHORT_HOOK_BANNER_SEC = 3.2
+SHORT_WORDS_PER_CAPTION = 4
+
+HIGHLIGHT_UNITS = {
+    "triệu", "tỷ", "ngàn", "nghìn", "trăm", "năm", "tháng", "tuần", "ngày",
+    "tiếng", "giờ", "phút", "giây", "lần", "bộ", "cây", "ký", "mét", "vạch",
+    "chu", "kỳ", "lõi", "lít", "gram", "kg", "km", "cm", "mm", "w", "kw", "v",
+    "million", "billion", "years", "months", "hours", "minutes", "seconds",
+    "cycles", "times", "miles", "kilometers", "percent",
+}
+
+HIGHLIGHT_KEYWORDS = {
+    "lfp", "ncm", "bms", "ip67", "ip68", "graphene", "lithium", "lithium-ion",
+    "silicon-carbon", "sulfide", "gan", "pd", "pps", "qc", "usb-c", "type-c",
+    "magsafe", "qi2", "oled", "amoled", "pwm", "ltpo", "hz", "wifi", "wi-fi",
+    "5ghz", "2.4ghz", "6ghz", "mesh", "modem", "router", "mbps", "gbps", "dbm",
+    "nvme", "ssd", "tbw", "anc", "eco", "sport", "km/h", "wh/kg", "kwh", "wh",
+    "mah", "ah", "mpa", "psi", "ppm", "tds", "usd", "220v", "lab", "ro",
+}
 
 # Audio / TTS Settings
 GEMINI_TTS_MODEL = "gemini-3.8-flash-tts"

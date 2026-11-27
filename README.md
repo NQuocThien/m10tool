@@ -1,34 +1,36 @@
-# Vắt Chanh Công Nghệ (VI) & Squeezing Tech (EN) — Video & Shorts Pipeline
+# Vắt Chanh Công Nghệ (VI) — V3 Shorts-First & Dual-Aspect Video Pipeline
 
-> **Kênh Tiếng Việt (`Vắt Chanh Công Nghệ`)**: *“Vắt sạch thông số, giữ lại cách dùng”* — Nền vàng kem ấm `#FAF7F2`  
-> **Kênh Tiếng Anh (`Squeezing Tech`)**: *“Extracting Value from Everyday Tech”* — Nền xanh đen `#0B132B`
-
-Tài liệu quy trình chuẩn từng bước: Xem chi tiết tại **[WORKFLOW.md](WORKFLOW.md)**.
+> **Định vị kênh**: *“Vắt sạch thông số, giữ lại cách dùng”* — Trục nội dung trọng tâm: **Điện • Di động • Sạc nhanh • Xe điện • Wi-Fi**.  
+> Xem hướng dẫn vận hành chi tiết từng bước tại **[WORKFLOW.md](WORKFLOW.md)**.
 
 ---
 
-## Quy Trình Nhanh 5 Bước
+## Điểm Mới Cốt Lõi Của Flow V3
 
-1. **Khởi tạo dự án**:
-   ```bash
-   python make_video.py --new <ten_project>
-   ```
-2. **Soạn kịch bản (`script_vi.txt` & `script_en.txt`, 28–32 câu)**:
-   - **Mở đầu (01–03)**: Gợi chuyện đời thường $\rightarrow$ Phá lầm tưởng $\rightarrow$ Lời chào dẫn nhập tự nhiên.
-   - **Thân bài (3–4 cụm độc lập)**: Đầu mỗi cụm có câu neo chủ đề chính (không mở đầu cụm bằng *"Nhưng..."*, *"Thứ hai là..."*) để sẵn sàng cắt sang Shorts.
-   - **Lời kết (3 câu cuối)**: Đúc kết thực dụng $\rightarrow$ Câu hỏi trò chuyện $\rightarrow$ Lời chào thương hiệu kèm slogan.
-3. **Sinh Prompt & Tải Media (`prompts_vi.txt` & `prompts_en.txt`)**:
-   - Đẩy prompt lên Google Flow: `python auto_flow.py projects/<ten_project>/prompts_vi.txt`
-   - Lưu media vào `video_vi/` (hoặc `imgs_vi/`) và `video_en/` (hoặc `imgs_en/`), đánh số thứ tự `01_` $\rightarrow$ `NN_`.
-4. **Render Video Dài 16:9 & Xuất Gói YouTube (`youtube_vi.md` & `youtube_en.md`)**:
-   ```bash
-   python make_video.py <ten_project> --lang vi
-   python make_video.py <ten_project> --lang en
-   ```
-5. **Tách 3–4 Tập YouTube Shorts 9:16 (`shorts_config_vi.json` & `shorts_config_en.json`)**:
-   - Khai báo `"main_topic"` để gắn nhãn Chủ đề chính cố định trên đầu mọi tập Short.
-   ```bash
-   python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_project> --lang vi --dry-run
-   python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_project> --lang vi
-   python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_project> --lang en
-   ```
+1. **Chiến lược Shorts-First Dò Đường**: Ra 1 Short `9:16` độc lập (`24–34s`, 6–7 câu) mỗi ngày để test chủ đề; bài nào vượt `2.000 views` & `APV > 75%` mới mở rộng thành Video dài `16:9` (`3.5–4.2 phút`).
+2. **Engine Render Hỗ Trợ Kép Thông Minh (`make_shorts.py` + `build_shorts.py`)**:
+   - Nguồn dọc `9:16`: Phóng **Full-Bleed 100% màn hình `1080x1920`**.
+   - Nguồn ngang `16:9` (khi tách từ dự án có sẵn): Dựng **nền mờ chuyển động + khung hình lớn `1048x740`**, xóa bỏ hoàn toàn "3 hộp chữ PowerPoint".
+   - **Banner Hook 3.2s đầu + Phụ đề động `3–5 từ/nhịp`** kèm highlight số liệu + **Seamless Loop** mặc định.
+3. **Video Dài Tối Ưu CTR & Giữ Chân (`make_video.py` + `core/renderer.py`)**:
+   - Tắt mặc định Intro 3s ở giây `00:00` để vào thẳng cảnh Hook.
+   - Tự động xuất **Thumbnail 16:9 tương phản cao (`thumbnail_vi.jpg`)** chữ siêu lớn đọc rõ trên điện thoại.
+
+---
+
+## Lệnh Khởi Chạy Nhanh
+
+```bash
+# 1. Tạo dự án Short 9:16 dò đường (6-7 câu, 24-34s)
+python make_video.py --new-short <project_slug>
+
+# 2. Kiểm duyệt Retention & Render Short 9:16 (tự động tạo TTS nếu chưa có)
+python .agents/skills/shorts-maker/scripts/build_shorts.py <project_slug> --lang vi --dry-run
+python .agents/skills/shorts-maker/scripts/build_shorts.py <project_slug> --lang vi
+
+# 3. Render Video dài 16:9 + Thumbnail tương phản cao (khi chủ đề thắng view)
+python make_video.py <project_slug> --lang vi --thumb-top "BẪY SẠC 65W 150K" --thumb-bottom "NƯỚNG PHỒNG PIN?!"
+
+# 4. Hoặc mở giao diện đồ họa Studio tất-cả-trong-một
+python app.py
+```

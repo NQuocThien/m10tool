@@ -22,7 +22,7 @@ from core.config import BASE_DIR, PROJECTS_DIR, RESOURCES_DIR, FFMPEG_PATH, DEFA
 from core.sorter import sort_media_by_prompts
 from core.renderer import get_bgm_path
 from core.tts import load_script, synthesize_preview
-from make_video import get_media_dir, get_script_path
+from make_video import get_media_dir, get_script_path, cmd_new_project
 
 SETTINGS_FILE = os.path.join(BASE_DIR, "app_settings.json")
 
@@ -84,6 +84,7 @@ class SqueezingTechApp:
 
         self.bot_proc = None
         self.render_proc = None
+        self.render_cancelled = False
         self.settings = load_settings()
         self.setup_styles()
         self.create_widgets()
@@ -231,24 +232,30 @@ class SqueezingTechApp:
 
         ttk.Button(bgm_frame, text="📂 Đổi Nhạc...", style="Secondary.TButton", command=self.change_bgm_file).pack(side="left", padx=3)
 
-        # 4. Action Buttons
-        act_frame = ttk.Frame(card, style="Card.TFrame")
-        act_frame.pack(fill="x", pady=(18, 6))
+        # 4. Action Buttons (2 rows so 860px window never clips buttons at high DPI)
+        res_frame = ttk.Frame(card, style="Card.TFrame")
+        res_frame.pack(fill="x", pady=(14, 4))
 
-        btn_open_folder = ttk.Button(act_frame, text="📂 Mở Thư Mục Ảnh (imgs)", style="Secondary.TButton", command=self.open_imgs_folder)
+        btn_open_folder = ttk.Button(res_frame, text="📂 Mở Thư Mục Media", style="Secondary.TButton", command=self.open_imgs_folder)
         btn_open_folder.pack(side="left", padx=4)
 
-        self.btn_open_script = ttk.Button(act_frame, text="📝 Mở Thoại Tiếng Việt", style="Secondary.TButton", command=self.open_script_file)
+        self.btn_open_script = ttk.Button(res_frame, text="📝 Mở Thoại Tiếng Việt", style="Secondary.TButton", command=self.open_script_file)
         self.btn_open_script.pack(side="left", padx=4)
 
-        self.btn_sort_media = ttk.Button(act_frame, text="🔀 Sort Resource", style="Primary.TButton", command=self.sort_project_resources)
+        self.btn_sort_media = ttk.Button(res_frame, text="🔀 Sort Resource", style="Primary.TButton", command=self.sort_project_resources)
         self.btn_sort_media.pack(side="left", padx=4)
 
-        self.btn_stop_render = ttk.Button(act_frame, text="⏹ Hủy", style="Danger.TButton", command=self.stop_render_process, state="disabled")
-        self.btn_stop_render.pack(side="right", padx=4)
+        act_frame = ttk.Frame(card, style="Card.TFrame")
+        act_frame.pack(fill="x", pady=(4, 6))
 
-        self.btn_render = ttk.Button(act_frame, text="🚀 BẮT ĐẦU RENDER VIDEO", style="Success.TButton", command=self.start_render_thread)
-        self.btn_render.pack(side="right", padx=4)
+        self.btn_render_shorts = ttk.Button(act_frame, text="📱 DỰNG SHORTS 9:16 (DÒ ĐƯỜNG)", style="Success.TButton", command=self.start_render_shorts_thread)
+        self.btn_render_shorts.pack(side="left", padx=4)
+
+        self.btn_render = ttk.Button(act_frame, text="🎬 VIDEO DÀI 16:9", style="Primary.TButton", command=self.start_render_thread)
+        self.btn_render.pack(side="left", padx=4)
+
+        self.btn_stop_render = ttk.Button(act_frame, text="⏹ Hủy Render", style="Danger.TButton", command=self.stop_render_process, state="disabled")
+        self.btn_stop_render.pack(side="right", padx=4)
 
         # 5. Render Progress Bar
         prog_frame = ttk.Frame(card, style="Card.TFrame")
@@ -561,8 +568,14 @@ class SqueezingTechApp:
         p_dir = os.path.join(PROJECTS_DIR, proj_name)
         lang = self.var_lang.get()
 
-        media_dir = get_media_dir(p_dir, lang=lang)
-        script_file = get_script_path(p_dir, lang=lang)
+        short_script = os.path.join(p_dir, f"script_short_{lang}.txt")
+        short_media_dir = os.path.join(p_dir, f"video_short_{lang}")
+        if self._is_short_first_only(p_dir, lang) and os.path.isdir(short_media_dir):
+            media_dir = short_media_dir
+            script_file = short_script
+        else:
+            media_dir = get_media_dir(p_dir, lang=lang)
+            script_file = get_script_path(p_dir, lang=lang)
 
         valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.mp4', '.mov', '.webm')
         media_count = len([f for f in os.listdir(media_dir) if f.lower().endswith(valid_exts)]) if os.path.exists(media_dir) else 0
@@ -571,23 +584,39 @@ class SqueezingTechApp:
             with open(script_file, "r", encoding="utf-8", errors="ignore") as f:
                 line_count = len([l.strip() for l in f if l.strip()])
 
+        shorts_dir = os.path.join(p_dir, f"shorts_{lang}")
+        shorts_cnt = len([f for f in os.listdir(shorts_dir) if f.lower().endswith(".mp4")]) if os.path.isdir(shorts_dir) else 0
         target_mp4 = f"{proj_name}_{lang}.mp4"
         is_rendered = os.path.exists(os.path.join(p_dir, target_mp4)) or (lang == "en" and os.path.exists(os.path.join(p_dir, f"{proj_name}.mp4")))
-        video_txt = f"Video: {target_mp4}" if is_rendered else f"Video: Chưa render [{lang.upper()}]"
+        video_txt = f"Shorts: {shorts_cnt} | Long: {'OK' if is_rendered else 'Chưa'}"
         
         self.lbl_proj_info.config(text=f"Trạng thái [{lang.upper()}]: 🖼️ {media_count} media ({os.path.basename(media_dir)}) | 📝 {line_count} câu ({os.path.basename(script_file)}) | 🎬 {video_txt}")
 
     def prompt_new_project(self):
         new_win = tk.Toplevel(self.root)
-        new_win.title("Tạo dự án mới")
-        new_win.geometry("380x140")
+        new_win.title("Tạo dự án mới (Flow V3)")
+        new_win.geometry("420x185")
         new_win.configure(bg="#0F172A")
         new_win.grab_set()
 
-        ttk.Label(new_win, text="Nhập tên thư mục dự án mới:", style="Card.TLabel").pack(pady=(16, 6))
-        ent = ttk.Entry(new_win, width=32)
+        ttk.Label(new_win, text="Nhập tên thư mục dự án mới (snake_case):", style="Card.TLabel").pack(pady=(14, 4))
+        ent = ttk.Entry(new_win, width=36)
         ent.pack(pady=4)
         ent.focus()
+
+        var_sf = tk.BooleanVar(value=True)
+        chk_sf = tk.Checkbutton(
+            new_win,
+            text="Chuẩn Shorts-First 9:16 dò đường (6-7 câu, 24-34s)",
+            variable=var_sf,
+            bg="#0F172A",
+            fg="#4ADE80",
+            selectcolor="#1E293B",
+            activebackground="#0F172A",
+            activeforeground="#4ADE80",
+            font=("Segoe UI", 9, "bold"),
+        )
+        chk_sf.pack(pady=6)
 
         def do_create():
             name = ent.get().strip()
@@ -597,18 +626,19 @@ class SqueezingTechApp:
             if os.path.exists(p_dir):
                 messagebox.showerror("Lỗi", "Tên dự án đã tồn tại!")
                 return
-            os.makedirs(os.path.join(p_dir, "imgs"), exist_ok=True)
-            with open(os.path.join(p_dir, "script_vi.txt"), "w", encoding="utf-8") as f:
-                f.write("01. Cau thoai Tieng Viet canh mot.\n02. Cau thoai Tieng Viet canh hai.\n")
-            with open(os.path.join(p_dir, "script_en.txt"), "w", encoding="utf-8") as f:
-                f.write("01. English narration for scene one.\n02. English narration for scene two.\n")
+            cmd_new_project(name, short_first=var_sf.get())
             new_win.destroy()
             self.refresh_projects()
             self.cbo_project.set(name)
             self.on_project_selected()
-            self.log(f"[OK] Đã tạo dự án mới: {name} (sẵn file script_vi.txt và script_en.txt)")
+            mode_lbl = "Shorts-First 9:16" if var_sf.get() else "Long-form 16:9"
+            self.log(f"[OK] Đã tạo dự án mới ({mode_lbl}): {name}")
 
-        ttk.Button(new_win, text="Tạo ngay", style="Primary.TButton", command=do_create).pack(pady=10)
+        ttk.Button(new_win, text="Tạo ngay", style="Primary.TButton", command=do_create).pack(pady=8)
+
+    def _is_short_first_only(self, p_dir, lang):
+        """True when project is in Stage-1 Shorts-First mode (script_short exists, long script not yet created)."""
+        return os.path.isfile(os.path.join(p_dir, f"script_short_{lang}.txt")) and not os.path.isfile(os.path.join(p_dir, f"script_{lang}.txt"))
 
     def open_imgs_folder(self):
         proj_name = self.cbo_project.get()
@@ -616,7 +646,10 @@ class SqueezingTechApp:
             return
         p_dir = os.path.join(PROJECTS_DIR, proj_name)
         lang = self.var_lang.get()
-        target_dir = get_media_dir(p_dir, lang=lang)
+        if self._is_short_first_only(p_dir, lang):
+            target_dir = os.path.join(p_dir, f"video_short_{lang}")
+        else:
+            target_dir = get_media_dir(p_dir, lang=lang)
         os.makedirs(target_dir, exist_ok=True)
         os.startfile(target_dir)
 
@@ -626,7 +659,10 @@ class SqueezingTechApp:
             return
         p_dir = os.path.join(PROJECTS_DIR, proj_name)
         lang = self.var_lang.get()
-        script_file = get_script_path(p_dir, lang=lang)
+        if self._is_short_first_only(p_dir, lang):
+            script_file = os.path.join(p_dir, f"script_short_{lang}.txt")
+        else:
+            script_file = get_script_path(p_dir, lang=lang)
         if not os.path.exists(script_file):
             with open(script_file, "w", encoding="utf-8") as f:
                 f.write("01. Cau thoai dau tien.\n")
@@ -640,16 +676,21 @@ class SqueezingTechApp:
 
         p_dir = os.path.join(PROJECTS_DIR, proj_name)
         lang = self.var_lang.get()
-        media_dir = get_media_dir(p_dir, lang=lang)
-        video_prompt_file = os.path.join(p_dir, f"prompts_{lang}_video.txt")
-        img_prompt_file = os.path.join(p_dir, f"prompts_{lang}_img.txt")
+        if self._is_short_first_only(p_dir, lang):
+            media_dir = os.path.join(p_dir, f"video_short_{lang}")
+            video_prompt_file = os.path.join(p_dir, f"prompts_short_{lang}_video.txt")
+            img_prompt_file = os.path.join(p_dir, f"prompts_short_{lang}_img.txt")
+        else:
+            media_dir = get_media_dir(p_dir, lang=lang)
+            video_prompt_file = os.path.join(p_dir, f"prompts_{lang}_video.txt")
+            img_prompt_file = os.path.join(p_dir, f"prompts_{lang}_img.txt")
 
         has_vid_p = os.path.exists(video_prompt_file)
         has_img_p = os.path.exists(img_prompt_file)
         if not has_vid_p and not has_img_p:
             messagebox.showwarning(
                 "Thiếu file prompt",
-                f"Không tìm thấy prompts_{lang}_video.txt hoặc prompts_{lang}_img.txt trong {proj_name}!"
+                f"Không tìm thấy {os.path.basename(video_prompt_file)} hoặc {os.path.basename(img_prompt_file)} trong {proj_name}!"
             )
             return
 
@@ -944,6 +985,7 @@ class SqueezingTechApp:
 
     def stop_render_process(self):
         if self.render_proc and self.render_proc.poll() is None:
+            self.render_cancelled = True
             try:
                 subprocess.run(["taskkill", "/F", "/T", "/PID", str(self.render_proc.pid)], capture_output=True)
                 self.log("[WARN] Đã hủy tiến trình render theo yêu cầu.")
@@ -956,22 +998,36 @@ class SqueezingTechApp:
         if not proj_name:
             messagebox.showwarning("Cảnh báo", "Vui lòng chọn dự án trước!")
             return
+        if self.render_proc and self.render_proc.poll() is None:
+            return
 
         lang = self.var_lang.get()
+        p_dir = os.path.join(PROJECTS_DIR, proj_name)
+        long_script = get_script_path(p_dir, lang=lang)
+        if not os.path.isfile(long_script):
+            messagebox.showwarning(
+                "Chưa có kịch bản Video dài",
+                f"Dự án '{proj_name}' đang ở Giai đoạn 1 (Shorts-First) và chưa có {os.path.basename(long_script)}!\nHãy bấm '📱 DỰNG SHORTS 9:16' trước, hoặc dùng /video-maker để tạo bản dài."
+            )
+            return
+
         voice_list = VOICES_VI if lang == "vi" else VOICES_EN
         sel_idx = self.cbo_voice.current()
         voice_id = voice_list[sel_idx][1] if 0 <= sel_idx < len(voice_list) else voice_list[0][1]
         force_flag = "--force" if self.chk_force.get() else ""
         use_25d_flag = "--25d" if self.chk_25d.get() else "--no-25d"
 
+        self.render_cancelled = False
         self.btn_render.config(state="disabled")
+        self.btn_render_shorts.config(state="disabled")
         self.btn_stop_render.config(state="normal")
-        self.set_render_progress(1, "Đang khởi động pipeline")
-        self.log(f"--- BẮT ĐẦU RENDER [{lang.upper()}]: {proj_name} (Voice: {voice_id}) ---")
+        self.set_render_progress(1, "Đang khởi động pipeline 16:9")
+        self.log(f"--- BẮT ĐẦU RENDER VIDEO DÀI [{lang.upper()}]: {proj_name} (Voice: {voice_id}) ---")
 
         def handle_output_line(text_line):
             self.log(text_line)
-            self.update_render_progress_from_line(text_line)
+            if not self.render_cancelled:
+                self.update_render_progress_from_line(text_line)
 
         def run():
             cmd = [sys.executable, "-u", os.path.join(BASE_DIR, "make_video.py"), proj_name, "--lang", lang, "--voice", voice_id, use_25d_flag]
@@ -989,16 +1045,90 @@ class SqueezingTechApp:
 
             def finish():
                 self.btn_render.config(state="normal")
+                self.btn_render_shorts.config(state="normal")
                 self.btn_stop_render.config(state="disabled")
                 self.on_project_selected()
-                if proc.returncode == 0:
-                    self.set_render_progress(100, "Hoàn tất", fg="#4ADE80")
+                if self.render_cancelled:
+                    self.set_render_progress(self.render_progress["value"], "Đã hủy thủ công", fg="#FBBF24")
+                elif proc.returncode == 0:
+                    self.set_render_progress(100, "Hoàn tất Video 16:9", fg="#4ADE80")
                     out_name = f"{proj_name}_{lang}.mp4"
                     messagebox.showinfo("Thành công", f"Đã dựng xong video [{lang.upper()}]:\n{out_name}")
                 else:
-                    if "Đã hủy" not in self.lbl_render_progress.cget("text"):
-                        self.set_render_progress(self.render_progress["value"], "Lỗi / Dừng", fg="#F87171")
-                    messagebox.showerror("Thất bại", "Quá trình render gặp lỗi hoặc đã bị hủy! Xem log bên dưới.")
+                    self.set_render_progress(self.render_progress["value"], "Lỗi / Dừng", fg="#F87171")
+                    messagebox.showerror("Thất bại", "Quá trình render gặp lỗi! Xem log bên dưới.")
+
+            self.root.after(0, finish)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def start_render_shorts_thread(self):
+        proj_name = self.cbo_project.get()
+        if not proj_name:
+            messagebox.showwarning("Cảnh báo", "Vui lòng chọn dự án trước!")
+            return
+        if self.render_proc and self.render_proc.poll() is None:
+            return
+
+        lang, voice_id, _ = self._get_selected_voice()
+        cfg_file = os.path.join(PROJECTS_DIR, proj_name, f"shorts_config_{lang}.json")
+        if not os.path.isfile(cfg_file) and proj_name != "lfp_vs_ncm":
+            messagebox.showwarning(
+                "Chưa có cấu hình Shorts",
+                f"Dự án '{proj_name}' chưa có file shorts_config_{lang}.json!\nHãy tạo qua /shorts-maker hoặc dùng '--new-short'."
+            )
+            return
+        shorts_script = os.path.join(BASE_DIR, ".agents", "skills", "shorts-maker", "scripts", "build_shorts.py")
+        if not os.path.isfile(shorts_script):
+            messagebox.showerror("Lỗi", f"Không tìm thấy script dựng Shorts: {shorts_script}")
+            return
+
+        self.render_cancelled = False
+        self.btn_render.config(state="disabled")
+        self.btn_render_shorts.config(state="disabled")
+        self.btn_stop_render.config(state="normal")
+        self.set_render_progress(5, "Đang dựng YouTube Shorts 9:16 (V3)")
+        self.log(f"--- BẮT ĐẦU DỰNG SHORTS 9:16 [{lang.upper()}]: {proj_name} ---")
+
+        def handle_line(text_line):
+            self.log(text_line)
+            if self.render_cancelled:
+                return
+            if "Auto-generating TTS" in text_line:
+                self.set_render_progress(20, "Đang tạo giọng đọc AI cho Short")
+            elif "=== BUILDING SHORT" in text_line:
+                self.set_render_progress(55, "Đang render cảnh 9:16 & phụ đề động")
+            elif "[DONE]" in text_line:
+                self.set_render_progress(88, "Đã ghép xong Short .mp4, đang xuất Thumbnail")
+            elif "[METADATA OK]" in text_line:
+                self.set_render_progress(100, "Hoàn tất Shorts 9:16", fg="#4ADE80")
+
+        def run():
+            cmd = [sys.executable, "-u", shorts_script, proj_name, "--lang", lang, "--voice", voice_id]
+            if self.chk_force.get():
+                cmd.append("--force-tts")
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            self.render_proc = proc
+            for line in proc.stdout:
+                clean = line.strip()
+                if clean:
+                    self.root.after(0, handle_line, clean)
+            proc.wait()
+            self.render_proc = None
+
+            def finish():
+                self.btn_render.config(state="normal")
+                self.btn_render_shorts.config(state="normal")
+                self.btn_stop_render.config(state="disabled")
+                self.on_project_selected()
+                if self.render_cancelled:
+                    self.set_render_progress(self.render_progress["value"], "Đã hủy thủ công", fg="#FBBF24")
+                elif proc.returncode == 0:
+                    self.set_render_progress(100, "Hoàn tất Shorts 9:16", fg="#4ADE80")
+                    messagebox.showinfo("Thành công", f"Đã dựng xong Shorts 9:16 + Thumbnail + Bài đăng tại:\nprojects/{proj_name}/shorts_{lang}/")
+                else:
+                    self.set_render_progress(self.render_progress["value"], "Lỗi Shorts", fg="#F87171")
+                    messagebox.showerror("Thất bại", "Quá trình dựng Shorts gặp lỗi! Xem log chi tiết bên dưới.")
 
             self.root.after(0, finish)
 

@@ -1,50 +1,30 @@
 ---
 name: shorts-maker
-description: This skill should be used when slicing 2-channel tech projects into vertical 9:16 YouTube Shorts with clear main-topic context, configs, thumbnails, and metadata.
-version: 1.5.0
+description: Primary Stage-1 skill in V3 workflow. Produces standalone 24-34s Full-Bleed 9:16 Probe Shorts (or slices 1-2 standalone Shorts from 16:9 projects) with 3.2s Hook banners, 3-5 word dynamic captions, and Seamless Loop.
+version: 3.0.0
 ---
 
-# Shorts Maker
+# Shorts Maker V3 — Standalone 9:16 Probe & Smart Showcase
 
-Slice completed 16:9 tech projects (`projects/<project>/`) into high-retention vertical 9:16 YouTube Shorts for **Vắt Chanh Công Nghệ (VI)** with animated `.mp4` openers, concrete number hooks, highlighted subtitles, distinct per-episode visual accents, and a Related-Video funnel CTA. *(EN channel `Squeezing Tech` is paused; only generate `shorts_config_en.json` or run `--lang en` when explicitly requested.)*
+Primary Stage-1 skill for **Vắt Chanh Công Nghệ (VI)**:
+- **Mode 1 (Default — Shorts-First Probe)**: Build **1 standalone `9:16` Full-Bleed Short (`24–34s`, 6–7 scenes)** per topic to validate demand (`>2,000 views`, `APV > 75%`) before producing Long-form.
+- **Mode 2 (Smart Repurpose)**: Slice **at most 1–2 standalone Shorts (`<35s`)** from a `16:9` project (blurred ambient backdrop + `1048x740` hero + dynamic captions).
 
-## Core Rules (Anti-Swipe & High Retention)
+## Core Rules (Mandatory)
+1. **Strict `24–34s` Target (`6–7` Lines, `10–15` Words/Line)**: Hard cap `<38s` (`<=7` scenes).
+2. **Ban Episode Numbering (`TẬP X/4`)**: Never put `Tập 1/4`, `Part 1`, `Episode 1` in `badge`, `title_line1`, or `thumb_sub_badge`.
+3. **3.2s Hook + Dynamic 3–5 Word Captions + Seamless Loop**:
+   - `make_shorts.py` V3 shows the Hook Banner ONLY in `0..3.2s` of Scene 01, pops 3–5 word highlighted captions at `y=1205..1475`, and defaults to `skip_outro: true` (`--no-outro`).
+4. **20% Real-World Proof + 80% 2D Vector Cutaway (`--ar 9:16`) + Micro Sub Cue**:
+   - Scene `01` `[VIDEO]`: Close-up physical symptom + moving nerdy lemon mascot.
+   - Scenes `02–05`: 2D cutaway anatomy (`1 [VIDEO]` + `3 [IMG]`, `--ar 9:16`).
+   - Scene `06` `[VIDEO]`: Pocket rule + **1.5s Subscribe cue** (*"Đăng ký Vắt Chanh để không mất tiền oan vì thông số ảo..."*) bridging back into Scene 01.
 
-1. **Unique Animated `.mp4` Opener + Shocking Number Hook per Short**:
-   - **No Static Image Openers**: Scene `scenes[0]` of EVERY Short episode MUST be an animated `.mp4` video clip (`[VIDEO]`), NEVER a static `.jpg`/`.png`.
-   - **No Duplicate Openers Across Episodes**: NEVER prepend the exact same `Scene 01` to Episode 2, 3, and 4 (returning viewers immediately swipe away thinking it is a duplicate upload). Each episode must open on its own unique `[VIDEO]` scene (`01` for Ep 1, and the animated cluster starter/climax scene for Ep 2, 3, 4).
-   - **Verbal Hook in First 3s (`scenes[0]`)**: The first spoken scene of every episode MUST state a **Shocking Number / Costly Pain + Main Topic + Angle** (never open with academic transitions like *"Xét về bài toán..."*, *"Với lộ trình..."*, *"Điểm khác biệt nằm ở..."*, or *"Nhưng..."*). If a cluster starter is a static `.jpg` or weak transition, open the Short with that cluster's animated `.mp4` climax scene (`[VIDEO]`) first as a Cold Open Hook, then follow with the explanation scenes!
-2. **Main Topic Clarity & Episode Visual Differentiation (Chống Mù Mẫu Thị Giác)**:
-   - Set `"main_topic"` in every episode of `shorts_config_{vi,en}.json`. `build_shorts.py` renders `MAIN_TOPIC • TẬP X/N` in the top pill and `Tập X/N • Cảnh Y/M` + a dynamic **Scene Progress Bar** below the `1048x590` 16:9 viewport.
-   - Assign a **distinct `accent_color`** to each episode (`#D35400`, `#F4C430`, `#7CB342` for VI; `#00E5FF`, `#76FF03`, `#FFB300` for EN) so `make_shorts.py` tints the header card, title, and progress bar differently per episode.
-   - `make_shorts.py` automatically highlights numbers, units, and key tech terms in the subtitle box.
-3. **High-Retention Pacing, In-Scene Final Banner & Fast Outro CTA (`~1.8s`)**:
-   - `build_shorts.py` trims silence, tightens narration to `1.18x` (+`3 kHz` presence), layers `sfx_whoosh.wav` (scene 1) & `sfx_pop.wav` (cuts), applies `1.15x` kinetic zoom on static scenes, and mixes `bgm_shorts.mp3` (`124 BPM`, `vol=0.13`).
-   - On the final content scene (`Cảnh N/N`), `make_shorts.py` renders an in-scene banner (`▶ BẤM VIDEO LIÊN QUAN GÓC DƯỚI ĐỂ XEM FULL`), followed by a fast `~1.8s` punchy Outro CTA card (`1.22x` tightened `shorts_cta_{lang}.mp3`). Pass `--no-outro` (or `"skip_outro": true`) when a 100% seamless loop is desired.
-   - NEVER paste raw URLs in `yt_pinned_comment` or `yt_description`; always point to the clickable `▶` Related Video button.
-4. **Approval Gate Before Rendering**: Run `--dry-run` first to audit retention risks, propose the 3–4 episodes breakdown, and confirm with the user before rendering `.mp4`.
-
-## Workflow
-
-### Step 1: Audit Project Assets
-Verify `projects/<project>/` contains `script_{vi,en}.txt`, `video_{vi,en}/` (1:1 count matching script), and `audio_{vi,en}/`. Check which scene numbers in `video_{vi,en}/` are animated `.mp4` clips.
-
-### Step 2: Design Shorts Configs (`shorts_config_{vi,en}.json`)
-Read `references/short-config-schema.md`. Group scenes into 3–4 episodes (6–8 scenes each, ~32–48s):
-- Ensure `scenes[0]` of every episode is a unique `.mp4` clip with a strong numeric/pain hook. (Use the cluster's `.mp4` climax scene as `scenes[0]` Cold Open if the cluster's first sentence is a `.jpg`!).
-- Rotate `accent_color` across episodes so consecutive Shorts look visually distinct on the feed.
-
-### Step 3: Validate Retention Audit & Render Shorts
-Run `--dry-run` to execute `audit_shorts_retention_risks` before rendering:
-
-```bash
-python .agents/skills/shorts-maker/scripts/build_shorts.py <project> --lang vi --dry-run
-python .agents/skills/shorts-maker/scripts/build_shorts.py <project> --lang vi
-```
-
-Use `--meta-only` to regenerate `*_thumb.jpg`, `*_dang_bai.txt`, and `TONG_HOP_DANG_SHORTS*.md`. Use `--no-outro` to omit the separate outro clip for seamless looping.
-
-## Bundled Resources
-- `references/short-config-schema.md`: Config JSON schema, Cold-Open `.mp4` slicing strategy, and SEO rules.
-- `scripts/build_shorts.py`: CLI builder with automatic retention risk auditing, 9:16 video rendering, thumbnails, and metadata.
-- `scripts/test_build_shorts.py`: Unit tests for config validation, retention risk audit, badge formatting, and asset resolution.
+## Mode 1 Workflow (Standalone 9:16 Probe)
+1. **Stage 1 (Stop Gate)**: Draft `6–7` lines (`10–15` words/line) + Curiosity-Gap title (`<65 chars`, zero spoilers). Wait for user approval.
+2. **Stage 2**: Run `python make_video.py --new-short <slug>`. Save `script_short_vi.txt`, `prompts_short_vi_video.txt` (`--ar 9:16`), `prompts_short_vi_img.txt` (`--ar 9:16`), and `shorts_config_vi.json` (`references/short-config-schema.md`).
+3. **Stage 3**: Place media (`01_..06_`) into `video_short_vi/`, then audit & render (auto-generates TTS!):
+   ```bash
+   python .agents/skills/shorts-maker/scripts/build_shorts.py <slug> --lang vi --dry-run
+   python .agents/skills/shorts-maker/scripts/build_shorts.py <slug> --lang vi
+   ```

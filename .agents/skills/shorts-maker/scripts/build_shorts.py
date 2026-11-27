@@ -12,12 +12,23 @@ REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "..", ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from core.config import DEFAULT_BGM_VOLUME, DEFAULT_FPS, FFMPEG_PATH, PROJECTS_DIR, RESOURCES_DIR
+from core.config import (
+    DEFAULT_BGM_VOLUME,
+    DEFAULT_FPS,
+    DEFAULT_VOICE,
+    FFMPEG_PATH,
+    PROJECTS_DIR,
+    RESOURCES_DIR,
+    SHORT_HOOK_BANNER_SEC,
+    SHORT_IDEAL_MAX_SCENES,
+    SHORT_MAX_DURATION_SEC,
+)
 from core.renderer import get_bgm_path
 from core.sorter import get_sorted_images
 from core.subtitles import generate_subtitles
-from core.tts import load_script
+from core.tts import generate_audio, load_script
 import make_shorts as ms
+import re
 from PIL import Image, ImageDraw
 
 REQUIRED_FIELDS = [
@@ -39,47 +50,90 @@ REQUIRED_FIELDS = [
 
 
 def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_override=None):
-    """Resolve script, media, audio, config, and output paths for any project."""
+    """
+    Resolve script, media, audio, config, and output paths for both:
+    - V3 Shorts-First projects (script_short_<lang>.txt + video_short_<lang>/ + audio_short_<lang>/)
+    - Legacy / Long-form projects (script_<lang>.txt + video_<lang>/ + audio_<lang>/)
+    """
     proj_dir = os.path.join(PROJECTS_DIR, proj_name)
     if not os.path.isdir(proj_dir):
         raise FileNotFoundError(f"Project not found: {proj_dir}")
 
-    script_path = os.path.join(proj_dir, f"script_{lang}.txt")
-    if not os.path.isfile(script_path):
-        fallback_script = os.path.join(proj_dir, "script.txt")
-        if os.path.isfile(fallback_script):
-            script_path = fallback_script
+    short_script = os.path.join(proj_dir, f"script_short_{lang}.txt")
+    long_script = os.path.join(proj_dir, f"script_{lang}.txt")
+    fallback_script = os.path.join(proj_dir, "script.txt")
+    config_path = os.path.join(proj_dir, f"shorts_config_{lang}.json")
+
+    # Determine max scene referenced in shorts_config so dual-stage projects pick the matching script
+    max_cfg_sc = 0
+    if os.path.isfile(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f_cfg:
+                raw_cfgs = json.load(f_cfg)
+            if isinstance(raw_cfgs, list):
+                for c in raw_cfgs:
+                    for s in c.get("scenes", []) + ([c["thumb_scene"]] if "thumb_scene" in c else []):
+                        if isinstance(s, int) and s > max_cfg_sc:
+                            max_cfg_sc = s
+        except Exception:
+            pass
+
+    is_short_first = False
+    if os.path.isfile(short_script):
+        short_len = len(load_script(short_script))
+        if max_cfg_sc > short_len and os.path.isfile(long_script):
+            script_path = long_script
         else:
-            raise FileNotFoundError(f"Script not found: {script_path}")
+            script_path = short_script
+            is_short_first = True
+    elif os.path.isfile(long_script):
+        script_path = long_script
+    elif os.path.isfile(fallback_script):
+        script_path = fallback_script
+    else:
+        raise FileNotFoundError(f"Script not found in {proj_dir} (checked script_short_{lang}.txt and script_{lang}.txt)")
+
+    def _has_valid_media(d):
+        if not os.path.isdir(d):
+            return False
+        exts = (".mp4", ".mov", ".m4v", ".webm", ".jpg", ".jpeg", ".png", ".webp")
+        return any(f.lower().endswith(exts) for f in os.listdir(d))
 
     if media_dir_override:
         media_dir = media_dir_override if os.path.isabs(media_dir_override) else os.path.join(proj_dir, media_dir_override)
     else:
         candidates = (
-            [f"video_{lang}", f"imgs_{lang}", "imgs-clean", "imgs"]
-            if lang == "en"
-            else [f"video_{lang}", f"imgs_{lang}", "imgs"]
+            [f"video_short_{lang}", f"imgs_short_{lang}", f"video_{lang}", f"imgs_{lang}", "imgs-clean", "imgs"]
+            if is_short_first
+            else [f"video_{lang}", f"imgs_{lang}", "imgs-clean", "imgs", f"video_short_{lang}"]
         )
         media_dir = next(
-            (os.path.join(proj_dir, c) for c in candidates if os.path.isdir(os.path.join(proj_dir, c))),
+            (os.path.join(proj_dir, c) for c in candidates if _has_valid_media(os.path.join(proj_dir, c))),
             None,
         )
+        if not media_dir:
+            media_dir = next(
+                (os.path.join(proj_dir, c) for c in candidates if os.path.isdir(os.path.join(proj_dir, c))),
+                None,
+            )
     if not media_dir or not os.path.isdir(media_dir):
         raise FileNotFoundError(f"Media directory not found in {proj_dir}")
 
     if audio_dir_override:
         audio_dir = audio_dir_override if os.path.isabs(audio_dir_override) else os.path.join(proj_dir, audio_dir_override)
     else:
-        audio_candidates = [f"audio_{lang}", "audio"]
-        audio_dir = next(
-            (os.path.join(proj_dir, c) for c in audio_candidates if os.path.isdir(os.path.join(proj_dir, c))),
-            None,
-        )
-    if not audio_dir or not os.path.isdir(audio_dir):
-        raise FileNotFoundError(f"Audio directory not found in {proj_dir}")
+        if is_short_first:
+            audio_dir = os.path.join(proj_dir, f"audio_short_{lang}")
+        else:
+            audio_candidates = [f"audio_{lang}", "audio"]
+            audio_dir = next(
+                (os.path.join(proj_dir, c) for c in audio_candidates if os.path.isdir(os.path.join(proj_dir, c))),
+                os.path.join(proj_dir, f"audio_{lang}"),
+            )
 
     config_path = os.path.join(proj_dir, f"shorts_config_{lang}.json")
     shorts_out_dir = os.path.join(proj_dir, f"shorts_{lang}")
+    has_long_video = os.path.isfile(os.path.join(proj_dir, f"{proj_name}_{lang}.mp4"))
     return {
         "proj_dir": proj_dir,
         "script_path": script_path,
@@ -87,16 +141,21 @@ def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_ov
         "audio_dir": audio_dir,
         "config_path": config_path,
         "shorts_out_dir": shorts_out_dir,
+        "is_short_first": is_short_first,
+        "has_long_video": has_long_video,
     }
 
 
-def load_and_validate_configs(config_path, total_scenes):
-    """Load shorts_config_<lang>.json and validate required fields and scene bounds."""
+def load_and_validate_configs(config_path, total_scenes, proj_name=None, lang="vi"):
+    """Load shorts_config_<lang>.json (with legacy lfp_vs_ncm fallback) and validate required fields."""
     if not os.path.isfile(config_path):
-        raise FileNotFoundError(f"Shorts config not found: {config_path}")
-
-    with open(config_path, "r", encoding="utf-8") as f:
-        configs = json.load(f)
+        if proj_name == "lfp_vs_ncm":
+            configs = ms.SHORTS_CONFIG_EN if lang == "en" else ms.SHORTS_CONFIG
+        else:
+            raise FileNotFoundError(f"Shorts config not found: {config_path}")
+    else:
+        with open(config_path, "r", encoding="utf-8") as f:
+            configs = json.load(f)
 
     if not isinstance(configs, list) or not configs:
         raise ValueError("Shorts config must be a non-empty JSON array.")
@@ -126,8 +185,20 @@ _WEAK_OPENER_PREFIXES = (
 )
 
 
+_SPOILER_TITLE_PATTERNS = (
+    "giống hệt nhau",
+    "như nhau 100%",
+    "câu trả lời là",
+    "kết quả là",
+)
+
+
 def audit_shorts_retention_risks(configs, all_lines, all_media):
-    """Detect retention killers: static .jpg openers, duplicated scene[0], 100% static episodes, or weak verbal hooks."""
+    """
+    V3 Retention Risk Auditor:
+    Detects static .jpg openers, duplicated scene[0], 100% static episodes, weak verbal hooks,
+    over-length episodes (>38s / >7 scenes), banned 'TẬP X/N' labels, and spoiler/overlong titles.
+    """
     vid_exts = {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
     warnings = []
     seen_openers = {}
@@ -181,16 +252,48 @@ def audit_shorts_retention_risks(configs, all_lines, all_media):
                     f"Adding a number in the first 3s boosts stop-scroll rate."
                 )
 
+        # 5. Scene count & estimated duration check (>38s kills APV on new channels)
+        total_words = sum(len(all_lines[sc - 1].split()) for sc in scenes if 1 <= sc <= len(all_lines))
+        # At 1.18x tightened Vietnamese TTS (~3.35 words/sec + 0.08s pad/scene)
+        est_dur_sec = (total_words / 3.35) + len(scenes) * 0.12
+        if len(scenes) > SHORT_IDEAL_MAX_SCENES or est_dur_sec > SHORT_MAX_DURATION_SEC:
+            warnings.append(
+                f"[RETENTION RISK] {ep_id}: Too long ({len(scenes)} scenes, ~{est_dur_sec:.1f}s est > {SHORT_MAX_DURATION_SEC:.0f}s target). "
+                f"Trim to 5-7 crisp scenes (24-34s) so APV exceeds 85%!"
+            )
+
+        # 6. Ban 'TẬP 1/4' / 'EPISODE 1' badges that cause cold-feed viewers to swipe away
+        for fld in ("badge", "title_line1", "thumb_sub_badge"):
+            val = str(cfg.get(fld, ""))
+            if re.search(r"(?i)\b(tập|tap|episode|part)\s*\d+", val):
+                warnings.append(
+                    f"[RETENTION RISK] {ep_id}: Field '{fld}' ('{val}') contains episode numbering. "
+                    f"Cold Shorts viewers swipe away from multi-part labels — make each Short 100% standalone!"
+                )
+                break
+
+        # 7. Audit YouTube titles for length (>72 chars) and answer-spoiling phrases
+        for yt_t in cfg.get("yt_titles", []):
+            clean_t = re.sub(r"(?i)#shorts\b", "", yt_t).strip()
+            if len(clean_t) > 72:
+                warnings.append(
+                    f"[CTR TIP] {ep_id}: Title too long ({len(clean_t)} chars > 72, truncates on mobile): '{clean_t[:52]}...'"
+                )
+            if any(sp in clean_t.lower() for sp in _SPOILER_TITLE_PATTERNS):
+                warnings.append(
+                    f"[CURIOSITY RISK] {ep_id}: Title spoils the verdict upfront ('{clean_t[:55]}...'). Hide the answer to preserve Curiosity Gap!"
+                )
+
     return warnings
 
 
 def format_overlay_badge(cfg, ep_idx, total_eps, lang="vi"):
-    """Format badge text so viewer immediately sees Main Topic + Episode progress."""
-    raw_badge = cfg["badge"].strip()
+    """Format clean standalone topic badge (automatically strips legacy 'TẬP X/N' numbering)."""
+    raw_badge = re.sub(r"(?i)\b(tập|tap|episode|ep|part)\s*\d+\s*(/\s*\d+)?\s*[•\-:|]*\s*", "", cfg.get("badge", "")).strip(" •-:|")
     main_topic = cfg.get("main_topic", "").strip()
-    if main_topic and main_topic.upper() not in raw_badge.upper():
+    if main_topic and raw_badge and main_topic.upper() not in raw_badge.upper():
         return f"{main_topic.upper()} • {raw_badge}"
-    return raw_badge
+    return (main_topic.upper() or raw_badge or ("SQUEEZING TECH" if lang == "en" else "VẮT CHANH CÔNG NGHỆ"))
 
 
 def format_step_label(ep_idx, total_eps, scene_order_idx, total_scenes_in_ep, lang="vi"):
@@ -371,14 +474,37 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     return outro_mp4, cta_dur
 
 
-def build_shorts(proj_name, lang, paths, configs, skip_outro=False):
-    """Render vertical 9:16 Short videos for all configured episodes."""
+def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=False, voice=None, force_tts=False):
+    """
+    V3 Shorts Builder:
+    - Auto-synthesizes missing TTS audio directly from script_short_<lang>.txt / script_<lang>.txt
+    - Auto-detects 9:16 Full-Bleed vs 16:9 Large Showcase per scene
+    - Renders 3.2s Hook Banner on Scene 1 + 3-5 word dynamic pop-in captions
+    - Defaults to Seamless Loop (skip_outro=True) to maximize APV > 85%
+    """
     shorts_out_dir = paths["shorts_out_dir"]
     os.makedirs(shorts_out_dir, exist_ok=True)
+    # Purge any orphan _temp_* folders left by killed renders
+    for entry in os.listdir(shorts_out_dir):
+        if entry.startswith("_temp_"):
+            shutil.rmtree(os.path.join(shorts_out_dir, entry), ignore_errors=True)
     bg_hex = "#0B132B" if lang == "en" else "#FAF7F2"
 
     all_lines = load_script(paths["script_path"])
     all_media = get_sorted_images(paths["media_dir"])
+
+    # Auto-generate TTS if any referenced scene audio is missing (enables 1-command Shorts-First workflow!)
+    needed_scenes = sorted({sc for cfg in configs for sc in cfg["scenes"]})
+    missing_audio = [
+        sc for sc in needed_scenes
+        if not os.path.isfile(os.path.join(paths["audio_dir"], f"{sc:02d}_voice.mp3"))
+        or os.path.getsize(os.path.join(paths["audio_dir"], f"{sc:02d}_voice.mp3")) == 0
+    ]
+    if force_tts or missing_audio:
+        eff_voice = voice or ("gemini:Charon" if lang == "en" else DEFAULT_VOICE)
+        print(f"-> Auto-generating TTS audio in '{os.path.basename(paths['audio_dir'])}' using {eff_voice}...")
+        generate_audio(paths["script_path"], paths["audio_dir"], voice=eff_voice, force=force_tts)
+
     generated = []
     total_eps = len(configs)
 
@@ -386,7 +512,8 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=False):
         short_id = cfg["id"]
         scene_nums = cfg["scenes"]
         overlay_badge = format_overlay_badge(cfg, ep_idx, total_eps, lang)
-        print(f"\n=== BUILDING SHORT [{lang.upper()}]: {short_id} ({overlay_badge}) | scenes={scene_nums} ===")
+        has_related = bool(cfg.get("has_related_video", paths.get("has_long_video", False)))
+        print(f"\n=== BUILDING SHORT V3 [{lang.upper()}]: {short_id} ({overlay_badge}) | scenes={scene_nums} ===")
 
         temp_dir = os.path.join(shorts_out_dir, f"_temp_{short_id}")
         os.makedirs(temp_dir, exist_ok=True)
@@ -420,21 +547,36 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=False):
                 for item in enriched:
                     f_txt.write(f"{item['index']:02d} ({scene_word} {item['scene_num']:02d}). {item['text']}\n")
 
+            # Render Scene 01 3.2s Hook Banner once per episode
+            hook_banner_png = os.path.join(temp_dir, "hook_banner_01.png")
+            ms.render_hook_banner_png(
+                hook_banner_png,
+                cfg["title_line1"],
+                cfg.get("title_line2", ""),
+                badge_text=overlay_badge,
+                lang=lang,
+                accent_hex=cfg["accent_color"],
+            )
+
             overlay_fn = ms.create_short_overlay_en if lang == "en" else ms.create_short_overlay
             total_sc = len(enriched)
             tasks = []
             with ThreadPoolExecutor(max_workers=4) as executor:
                 for i, item in enumerate(enriched):
                     order_idx = i + 1
+                    mw, mh = ms.probe_media_dimensions(selected_media[i])
+                    is_portrait = (mh > mw)
                     overlay_png = os.path.join(temp_dir, f"overlay_{order_idx:02d}.png")
                     box_rect = overlay_fn(
                         overlay_png,
                         overlay_badge,
                         cfg["title_line1"],
                         cfg["title_line2"],
-                        subtitle_text=item["text"],
+                        subtitle_text="",  # Dynamic 3-5 word strips handle captions in V3
                         step_label=format_step_label(ep_idx, total_eps, order_idx, total_sc, lang),
                         accent_hex=cfg["accent_color"],
+                        is_portrait=is_portrait,
+                        has_related_video=has_related,
                     )
                     fut = executor.submit(
                         ms._render_short_scene,
@@ -447,13 +589,19 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=False):
                         DEFAULT_FPS,
                         temp_dir,
                         bg_hex,
+                        item["text"],
+                        lang,
+                        cfg["accent_color"],
+                        hook_banner_png if order_idx == 1 else None,
+                        SHORT_HOOK_BANNER_SEC,
                     )
                     tasks.append((order_idx, item["scene_num"], item["duration"], fut))
 
                 clip_files = [fut.result() for _, _, _, fut in tasks]
 
-            # Append fast ~1.8s Outro CTA hook unless skip_outro is set for Seamless Loop
-            if skip_outro or cfg.get("skip_outro", False):
+            # Seamless Loop is NOW DEFAULT (skip_outro=True unless --with-outro is explicitly passed)
+            use_outro = True if force_outro else ((not skip_outro) and (not cfg.get("skip_outro", True)))
+            if not use_outro:
                 outro_dur = 0.0
             else:
                 outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, DEFAULT_FPS)
@@ -600,7 +748,10 @@ def main():
     parser.add_argument("--media-dir", default=None, help="Optional override for media directory")
     parser.add_argument("--audio-dir", default=None, help="Optional override for audio directory")
     parser.add_argument("--meta-only", action="store_true", help="Only render thumbnails and metadata")
-    parser.add_argument("--no-outro", action="store_true", help="Skip separate outro card for 100% seamless loop")
+    parser.add_argument("--no-outro", action="store_true", default=True, help="Seamless loop without separate outro card (Default in V3)")
+    parser.add_argument("--with-outro", action="store_true", help="Append ~1.8s separate outro CTA card (disables seamless loop)")
+    parser.add_argument("--voice", default=None, help="Optional TTS voice when auto-synthesizing missing Short audio")
+    parser.add_argument("--force-tts", action="store_true", help="Force re-synthesizing TTS audio")
     parser.add_argument("--dry-run", action="store_true", help="Validate paths and config without rendering")
     args = parser.parse_args()
 
@@ -610,8 +761,9 @@ def main():
     if len(all_lines) != len(all_media):
         raise ValueError(f"Script lines ({len(all_lines)}) != media count ({len(all_media)})")
 
-    configs = load_and_validate_configs(paths["config_path"], len(all_lines))
-    print(f"[VALIDATED] {args.project} ({args.lang}): {len(all_lines)} scenes, {len(configs)} shorts")
+    configs = load_and_validate_configs(paths["config_path"], len(all_lines), proj_name=args.project, lang=args.lang)
+    mode_tag = "SHORTS-FIRST 9:16" if paths.get("is_short_first") else "16:9 -> 9:16 SHOWCASE"
+    print(f"[VALIDATED] {args.project} ({args.lang} | {mode_tag}): {len(all_lines)} scenes, {len(configs)} short(s)")
 
     retention_warnings = audit_shorts_retention_risks(configs, all_lines, all_media)
     for w in retention_warnings:
@@ -621,11 +773,23 @@ def main():
         for cfg in configs:
             sc0 = cfg["scenes"][0]
             m0 = os.path.basename(all_media[sc0 - 1])
-            print(f"  - {cfg['id']}: scenes={cfg['scenes']} (opener=#{sc0:02d} {m0}), thumb={cfg['thumb_scene']}")
+            mw, mh = ms.probe_media_dimensions(all_media[sc0 - 1])
+            aspect = "9:16 Full-Bleed" if mh > mw else "16:9 Showcase"
+            print(f"  - {cfg['id']}: scenes={cfg['scenes']} (opener=#{sc0:02d} {m0} [{aspect}]), thumb={cfg['thumb_scene']}")
         return
 
+    skip_outro_flag = not args.with_outro
     if not args.meta_only:
-        build_shorts(args.project, args.lang, paths, configs, skip_outro=args.no_outro)
+        build_shorts(
+            args.project,
+            args.lang,
+            paths,
+            configs,
+            skip_outro=skip_outro_flag,
+            force_outro=args.with_outro,
+            voice=args.voice,
+            force_tts=args.force_tts,
+        )
     generate_metadata_and_thumbnails(args.project, args.lang, paths, configs)
 
 

@@ -136,7 +136,7 @@ def _render_single_scene(idx, media_path, item, target_w, target_h, fps, max_zoo
                 clip_path
             ]
         else:
-            effective_zoom = max(max_zoom, 1.035)
+            effective_zoom = max(max_zoom, 1.08)
             delta_zoom = effective_zoom - 1.00
             step = delta_zoom / total_frames
 
@@ -145,9 +145,14 @@ def _render_single_scene(idx, media_path, item, target_w, target_h, fps, max_zoo
             else:
                 zoom_expr = f"max({effective_zoom}-on*{step:.6f},1.00)"
 
+            # Subtle horizontal pan drift to keep 2D static cutaways visually alive
+            pan_sign = "+" if (idx % 4 in (1, 2)) else "-"
+            x_expr = f"iw/2-(iw/zoom/2){pan_sign}(iw-iw/zoom)*0.22*(on/{max(1, total_frames)})"
+            y_expr = "ih/2-(ih/zoom/2)"
+
             vf = (
                 f"scale={target_w}:{target_h}:force_original_aspect_ratio=increase,crop={target_w}:{target_h},"
-                f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={target_w}x{target_h}:fps={fps},"
+                f"zoompan=z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d={total_frames}:s={target_w}x{target_h}:fps={fps},"
                 f"format=yuv420p"
             )
 
@@ -168,7 +173,141 @@ def _render_single_scene(idx, media_path, item, target_w, target_h, fps, max_zoo
 
     return clip_path
 
-def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=None, use_intro=True, lang="vi", intro_path=None, motion_25d=False):
+def render_long_thumbnail(
+    hero_media_path,
+    output_jpg,
+    headline_top,
+    headline_bottom,
+    badge_text=None,
+    lang="vi",
+):
+    """
+    Generates a high-CTR 1920x1080 YouTube Long-form thumbnail with:
+    - Hero visual zoomed on the right + high-contrast dark gradient scrim on the left
+    - Giant 2-line Curiosity-Gap typography readable on small mobile feeds
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1920, 1080
+    is_en = (lang == "en")
+    if badge_text is None:
+        badge_text = "SQUEEZING TECH" if is_en else "VẮT CHANH CÔNG NGHỆ"
+
+    temp_frame = None
+    ext = os.path.splitext(hero_media_path)[1].lower()
+    try:
+        if ext in {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}:
+            temp_frame = output_jpg + "._hero_tmp.jpg"
+            for ss_t in ("00:00:01.20", "00:00:00.10"):
+                subprocess.run(
+                    [FFMPEG_PATH, "-y", "-ss", ss_t, "-i", hero_media_path, "-frames:v", "1", "-update", "1", temp_frame],
+                    capture_output=True,
+                )
+                if os.path.exists(temp_frame) and os.path.getsize(temp_frame) > 0:
+                    break
+            src_img_path = temp_frame if (temp_frame and os.path.exists(temp_frame)) else None
+        else:
+            src_img_path = hero_media_path if os.path.exists(hero_media_path) else None
+
+        canvas = Image.new("RGBA", (W, H), (15, 23, 42, 255))
+        if src_img_path:
+            hero = Image.open(src_img_path).convert("RGBA")
+            hw, hh = hero.size
+            # Keep right-side mascot & hero 100% unclipped while covering full 1920x1080
+            scale = max(W / hw, H / hh)
+            nw, nh = int(hw * scale), int(hh * scale)
+            hero_r = hero.resize((nw, nh), Image.LANCZOS)
+            cx = max(0, nw - W)
+            cy = max(0, (nh - H) // 2)
+            canvas.paste(hero_r.crop((cx, cy, cx + W, cy + H)), (0, 0))
+
+        # High-contrast left dark gradient scrim (prevents pale #FAF7F2 background from washing out on YouTube Light Mode)
+        scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        sdraw = ImageDraw.Draw(scrim)
+        scrim_End = int(W * 0.68)
+        base_rgb = (8, 13, 28) if is_en else (20, 17, 15)
+        for x in range(scrim_End):
+            ratio = 1.0 - (x / scrim_End)
+            alpha = int(min(242, 248 * (ratio ** 1.35)))
+            sdraw.line([(x, 0), (x, H)], fill=(base_rgb[0], base_rgb[1], base_rgb[2], alpha))
+        canvas = Image.alpha_composite(canvas, scrim)
+        draw = ImageDraw.Draw(canvas)
+
+        def _font(sz):
+            for fp in (r"C:\Windows\Fonts\arialbd.ttf", r"C:\Windows\Fonts\segoeuib.ttf", r"C:\Windows\Fonts\tahomabd.ttf"):
+                if os.path.exists(fp):
+                    return ImageFont.truetype(fp, sz)
+            return ImageFont.load_default()
+
+        accent_primary = (118, 255, 3, 255) if is_en else (244, 196, 48, 255)    # Neon Lime / Lemon Yellow
+        accent_alert = (0, 229, 255, 255) if is_en else (211, 84, 0, 255)       # Cyan / Terracotta Red-Orange
+        white = (255, 255, 255, 255)
+        dark_ink = (15, 18, 24, 255)
+
+        # Outer high-contrast border so thumbnail pops against white/dark YouTube background
+        draw.rectangle((0, 0, W - 1, H - 1), outline=accent_primary, width=12)
+
+        # Brand badge top-left
+        f_badge = _font(32)
+        bb = draw.textbbox((0, 0), badge_text, font=f_badge)
+        bw = (bb[2] - bb[0]) + 52
+        draw.rounded_rectangle((72, 68, 72 + bw, 134), radius=33, fill=accent_primary, outline=dark_ink, width=4)
+        draw.text((72 + 26, 82), badge_text, font=f_badge, fill=dark_ink)
+
+        # Giant Line 1 (auto-shrinks & re-wraps cleanly so max 2 lines never truncate words)
+        max_text_w = int(W * 0.56)
+        words1 = headline_top.upper().split()
+        f_big = _font(104)
+        lines1 = []
+        for cand_sz in (104, 88, 74, 62):
+            f_big = _font(cand_sz)
+            lines1 = []
+            cur = []
+            for w in words1:
+                cand = " ".join(cur + [w])
+                if (draw.textbbox((0, 0), cand, font=f_big)[2] <= max_text_w) or not cur:
+                    cur.append(w)
+                else:
+                    lines1.append(" ".join(cur))
+                    cur = [w]
+            if cur:
+                lines1.append(" ".join(cur))
+            if len(lines1) <= 2:
+                break
+
+        line_step = max(84, int(f_big.size * 1.22))
+        y_cursor = 220
+        for ln in lines1[:2]:
+            draw.text((76, y_cursor + 6), ln, font=f_big, fill=(0, 0, 0, 220))
+            draw.text((72, y_cursor), ln, font=f_big, fill=white, stroke_width=5, stroke_fill=dark_ink)
+            y_cursor += line_step
+
+        # Giant Line 2 inside high-contrast Alert Pill
+        if headline_bottom:
+            hb_txt = headline_bottom.upper().strip()
+            f_bot = _font(88)
+            while f_bot.size > 54 and draw.textbbox((0, 0), hb_txt, font=f_bot)[2] > (max_text_w + 80):
+                f_bot = _font(f_bot.size - 8)
+            tb = draw.textbbox((0, 0), hb_txt, font=f_bot)
+            pw = (tb[2] - tb[0]) + 72
+            ph = (tb[3] - tb[1]) + 54
+            py = min(H - ph - 80, y_cursor + 36)
+            draw.rounded_rectangle((78, py + 8, 78 + pw, py + ph + 8), radius=26, fill=(0, 0, 0, 180))
+            draw.rounded_rectangle((72, py, 72 + pw, py + ph), radius=26, fill=accent_alert, outline=white, width=4)
+            pill_fg = dark_ink if is_en else white
+            draw.text((72 + 36, py + 24 - tb[1]), hb_txt, font=f_bot, fill=pill_fg)
+
+        canvas.convert("RGB").save(output_jpg, "JPEG", quality=95)
+        return output_jpg
+    finally:
+        if temp_frame and os.path.exists(temp_frame):
+            try:
+                os.remove(temp_frame)
+            except Exception:
+                pass
+
+
+def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=None, use_intro=False, lang="vi", intro_path=None, motion_25d=False):
     if len(image_paths) != len(enriched_items):
         raise ValueError(
             f"Count mismatch: {len(image_paths)} media files vs {len(enriched_items)} audio/script lines. "

@@ -1,48 +1,30 @@
-# Quy Chuẩn Prompt Kênh Tiếng Việt: Vắt Chanh Công Nghệ
+# Quy Chuẩn Prompt Kênh Tiếng Việt: Vắt Chanh Công Nghệ (V3)
 
 ## 1. Nhận Diện Thương Hiệu (Brand DNA)
 - **Tên kênh**: Vắt Chanh Công Nghệ
 - **Slogan**: *Vắt sạch thông số, giữ lại cách dùng*
-- **Phong cách chủ đạo**: 2D Flat Vector Editorial Tech, nét vẽ bo tròn thân thiện, ấm áp, trực quan dễ hiểu cho người xem Việt Nam.
+- **Trục nội dung trọng tâm**: Phần cứng Điện – Di động – Sạc nhanh – Xe điện – Mạng Wi-Fi.
+- **Phong cách kết hợp V3 (Tăng Độ Tin Cậy & Xóa Cảm Giác "Rác AI")**:
+  - **Cảnh Hook Mở Màn (`Cảnh 01`)**: Ưu tiên mô tả cận cảnh vật thể/tình huống đời thực có độ tương phản mạnh (ổ cắm tia lửa, củ sạc nóng đỏ, màn hình báo sóng yếu, lõi pin phồng) kết hợp đường cắt X-ray editorial sắc nét và **Mascot Chanh đeo kính chuyển động**.
+  - **Các cảnh Giải Phẫu (`Cảnh 02..N`)**: 2D Flat Vector Editorial Tech Cutaway trên nền vàng kem ấm `#FAF7F2`, đường viền nâu than `#1C1917` dày dặn, điểm nhấn vàng chanh `#F4C430`, cam đất `#D35400`, xanh lá mầm `#7CB342`.
 
-## 2. Bảng Màu Bắt Buộc (Color Palette)
-- **Màu nền (Background)**: Vàng kem ấm (`warm cream background (#FAF7F2)`). **TUYỆT ĐỐI KHÔNG** dùng nền xanh đen hay nền tối.
-- **Màu chủ đạo (Primary)**: Vàng chanh ấm (`golden lemon yellow #F4C430`) kết hợp Cam đất (`terracotta orange #D35400`).
-- **Màu điểm nhấn (Accent)**: Xanh lá mầm (`fresh lime green #7CB342`) đại diện cho sự bền bỉ, an toàn, sinh thái và sóng công nghệ.
-- **Đường nét (Outlines)**: Nâu than đậm (`clean rounded deep charcoal line art #1C1917`), nét dày dặn, bo góc mềm mại.
+## 2. Quy Tắc Chống Lỗi Hình AI (Mandatory)
+1. **CẤM chữ rởm / tiếng Anh sai ngữ cảnh trong hình**: Luôn gắn `no text, no words, no letters, no labels, no numbers` (mọi chữ và số liệu sẽ do `make_shorts.py` / `renderer.py` vẽ sắc nét bằng tiếng Việt!).
+2. **BẮT BUỘC có Mascot Chanh chuyển động trong MỌI cảnh `[VIDEO]`**: `a cute animated nerdy lemon mascot wearing round glasses actively pointing / testing / shielding / reacting`.
+3. **Từ khóa chuẩn cho Xe Máy Điện Việt Nam**: Luôn viết `sit-down Vespa-style electric moped motorbike with padded saddle seat and front leg shield`, cấm `kick scooter, stand-up scooter`.
+4. **Bố cục an toàn cho Shorts dọc (`--ar 9:16`)**: Đặt vật thể chính và Mascot Chanh tập trung ở **vùng giữa khung hình (`y = 22% .. 65%`)**, chừa khoảng thoáng nhẹ ở đỉnh (cho Hook 3s đầu) và 1/3 dưới (cho Phụ đề động 3–5 từ).
 
-## 3. Liên Kết Phong Cách Logo & Banner Kênh
-Khi viết prompt cho các cảnh giải thích hoặc so sánh, lồng ghép tinh tế các yếu tố nhận diện từ Logo & Banner kênh:
-- **Biểu tượng nút nguồn quả chanh**: `stylized lemon power emblem` hoặc `subtle lemon tech badge detail`.
-- **Lá mầm / Sóng công nghệ**: `sprout leaf accent` hoặc `lime green Wi-Fi wave motif`.
-- **Mascot (BẮT BUỘC có chuyển động trong MỌI cảnh `[VIDEO]` + Mở đầu / CTA cuối video)**: `a cute animated nerdy lemon mascot wearing round glasses` đang cử động sinh động (chỉ tay, bật công tắc, quạt khói, ôm heo đất, giơ ngón cái...). Mọi câu prompt trong `prompts_vi_video.txt` bắt buộc phải có linh vật chanh chuyển động tương tác với bối cảnh.
-- **Từ khóa bắt buộc cho Xe Máy Điện (Tránh vẽ nhầm xe trượt Kick Scooter)**: Luôn dùng `sit-down Vespa-style electric moped motorbike with padded saddle seat and front leg shield` (hoặc `electric motorbike`), kèm hậu tố cấm `no kick scooter, no stand-up scooter` và `--no kick scooter, stand-up scooter, push scooter`. **TUYỆT ĐỐI KHÔNG** viết trống không là `electric scooter` (AI phương Tây mặc định hiểu là xe trượt đứng Xiaomi).
-- **Bố cục**: Bento card bo góc nhẹ nhàng hoặc mặt cắt 2D trực quan (`modern editorial tech infographic`).
-
-## 4. Cấu Trúc Prompt Chuẩn Kênh Việt
-
-### Hậu tố Negative bắt buộc (Gắn cuối MỌI câu prompt `[VIDEO]` và `[IMG]`):
+## 3. Hậu Tố Negative Bắt Buộc (Gắn Cuối Mọi Prompt `[VIDEO]` & `[IMG]`)
 ```text
-Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo.
+Negative: no text, no words, no letters, no English labels, no 3D render, no anime cel-shaded action style, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo, no google logo, no gemini star.
 ```
 
-### Công thức ghép Prompt:
+## 4. Boilerplate Chuẩn Dọc `9:16` (Shorts-First Probe — Mặc Định)
 ```text
-[Mô tả hành động/vật thể chính trực quan] + on a warm cream background (#FAF7F2), [Chi tiết màu sắc: lime green / golden lemon / terracotta orange] + [Chi tiết liên kết thương hiệu nhẹ nếu phù hợp] + clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+[Mô tả cận cảnh hành động / mặt cắt linh kiện đặt ở trung tâm khung dọc] + featuring a cute animated nerdy lemon mascot wearing round glasses actively reacting, centered vertical composition with clean breathing room at top and bottom third, on a warm cream background (#FAF7F2), golden lemon (#F4C430), terracotta orange (#D35400) and fresh lime green (#7CB342) accents, clean rounded deep charcoal line art (#1C1917), modern editorial tech cutaway infographic, no text, no words, no letters, no google logo, no gemini logo, no star icon, no sparkles. Negative: no text, no words, no letters, no English labels, no 3D render, no anime cel-shaded action style, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo, no google logo, no gemini star. --no dark background, 3d, logo, watermark, gemini, google, star, sparkle, text, words, letters --ar 9:16
 ```
 
-### Boilerplate Video Ngang (16:9 - YouTube):
+## 5. Boilerplate Chuẩn Ngang `16:9` (Video Dài Mở Rộng)
 ```text
-on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
-```
-
-### Boilerplate Video Dọc (9:16 - Shorts/TikTok/Reels):
-```text
-on a warm cream background (#FAF7F2), warm golden lemon and terracotta palette with lime green accents, clean rounded charcoal line art, modern editorial tech infographic, clean vector aesthetic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 9:16
-```
-
-## 5. Ví Dụ Định Dạng Trong `prompts_vi_video.txt` / `prompts_vi_img.txt`
-```text
-# Cảnh 01 [VIDEO]: [Tóm tắt ngắn gọn nội dung câu thoại số 01]
-Top-down 2D flat vector comparison of two electric motorbike battery packs side by side on a warm cream background (#FAF7F2), left LFP pack framed in sturdy lime green and charcoal outline, right NCM pack framed in energetic golden lemon and terracotta orange outline, stylized lemon power emblem in center as comparison divider, clean rounded line art, modern editorial tech infographic, no text, no google logo, no gemini logo, no star icon, no sparkles. Negative: no 3D render, no photorealistic, no anime cel-shaded action style, no complex shading, no realistic proportions, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo. --no dark background, 3d, realistic, photorealistic, logo, watermark, gemini, google, star, sparkle, text --ar 16:9
+[Mô tả mặt cắt giải phẫu / so sánh trực diện 2 bên] + on a warm cream background (#FAF7F2), warm golden lemon (#F4C430) and terracotta (#D35400) palette with fresh lime green (#7CB342) accents, clean rounded deep charcoal line art (#1C1917), modern editorial tech infographic, clean vector aesthetic, no text, no words, no letters, no google logo, no gemini logo, no star icon, no sparkles. Negative: no text, no words, no letters, no English labels, no 3D render, no anime cel-shaded action style, no bright neon cyberpunk colors, no talking mouth movement, no female voice, no Southern accent, no upbeat music, no blurry, no watermark, no logo, no google logo, no gemini star. --no dark background, 3d, logo, watermark, gemini, google, star, sparkle, text, words, letters --ar 16:9
 ```

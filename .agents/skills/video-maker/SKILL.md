@@ -1,83 +1,56 @@
 ---
 name: video-maker
-description: This skill should be used when writing natural scripts, generating 2-channel visual prompts (VI/EN), and producing tech videos for Vắt Chanh Công Nghệ & Squeezing Tech.
-version: 2.4.0
+description: Stage-2 Long-Form Deep-Dive skill in V3 workflow. Expands proven winning Shorts (>2,000 views & APV >75%) into high-retention 24-28 scene 16:9 videos (0s Intro, dynamic pacing <7s/scene, high-contrast 16:9 thumbnail).
+version: 3.0.0
 ---
 
-# Video Maker - Vắt Chanh Công Nghệ (VI-First)
+# Video Maker V3 — High-Retention 16:9 Deep Dive (Winner Expansion)
 
-Produce high-retention 30-scene tech scripts (ready for 4 standalone Shorts), generate hybrid prompts, and render Full HD 16:9 videos for **Vắt Chanh Công Nghệ (VI)**. *(EN channel `Squeezing Tech` is paused; only generate EN assets if user explicitly requests `--en`.)*
+Expand proven Shorts topics (or user-selected flagship topics in the **Điện – Di động – Xe điện** pillar) into crisp **3.5 – 4.2 minute (`24–28` scene)** Full HD `16:9` videos that open directly on the Hook at `00:00` and auto-generate high-contrast thumbnails.
 
-## Core Rules (Mandatory)
+## Core Rules (Mandatory for Long-Form CTR & Retention)
 
-1. **Script Approval Gate (Chốt Kịch Bản Trước - Tạo Prompt Sau)**:
-   - NEVER generate image/video prompts before user approves the script.
-   - Complete Stage 1 (draft script + show 4 Shorts cluster hooks) and wait for confirmation before Stage 2.
-2. **Scroll-Stopping Hooks for Intro & All 4 Shorts Clusters**:
-   - Read `references/script-writing-guide.md` before drafting.
-   - **Intro (Scenes 01–03)**: 3 beats — *Shocking Number/Paradox -> Core Mechanism Reveal -> Open Loop Payoff Promise* (ban *"Chắc hẳn bạn từng..."*).
-   - **4 Body Clusters (Scenes 04 to N-3)**: Every cluster starter (e.g., Scenes `04`, `10`, `16`, `22`) is the **0-second opener of a Short**. It MUST be a **Self-Contained Hook (Shocking Number / Costly Pain + Main Topic + Cluster Angle)**.
-   - **Ban Academic Transitions**: NEVER open a cluster with *"Xét về bài toán..."*, *"Với lộ trình..."*, *"Trong bài toán..."*, *"Điểm khác biệt nằm ở..."*, *"Khi mua..., lầm tưởng là..."*, or *"Thủ phạm thứ hai là..."*.
-   - **Pacing & Numbers**: Use internal punctuation (`.`, ` — `) for Gemini TTS (`voice_5mxlq1k9luls` / `Charon`) weight; write numbers as digits + units (`200 km`, `65%`, `150 triệu`, `3.000 chu kỳ`) for subtitle keyword highlighting.
-3. **Mandatory `[VIDEO] (.mp4)` Allocation, Topic-Matched Outro (`29`, `30`) & Animated Lemon Mascot**:
-   - To prevent static `.jpg` slideshows in Shorts, allocate **7–8 `[VIDEO]` prompts** directly to **Scene 01 (Short 1 Opener)**, **Cluster 2, 3, and 4 Starter Scenes (Shorts 2, 3, 4 Openers)**, **1–2 Climax/Scene 02 clips**, PLUS **the last 2 Outro Scenes (`N-1` Survey & `N` Sign-off, e.g. Scenes `29` and `30`)**.
-   - **NEVER reuse off-topic Outro clips (`29_mascot_survey.mp4`, `30_mascot_outro.mp4`) from unrelated niches** (e.g., never copy electric motorbike outro clips into a water purifier, smartphone, or Wi-Fi video). Always write dedicated topic-specific `[VIDEO]` prompts for Scenes `N-1` (`29`) and `N` (`30`) featuring the main device/subject of the current project alongside the animated lemon mascot. Only Scene `03` (`03_mascot_intro.mp4` - neutral lemon battery beaker) may be reused as `[REUSE]`.
-   - Every Short episode (`1/4` to `4/4`) must start with an animated `.mp4` clip in its first scene.
-   - **Mandatory Moving Lemon Mascot in ALL `[VIDEO]` Prompts**: Every single `[VIDEO]` prompt in `prompts_{vi,en}_video.txt` MUST include the animated lemon mascot (`a cute animated nerdy lemon mascot wearing round glasses`) actively moving, reacting, pointing, or interacting with the objects in the scene (never static).
-4. **Channel Visual Isolation & Mandatory Negative Suffix**:
-   - **VI (`Vắt Chanh Công Nghệ`)**: Warm cream `#FAF7F2`, charcoal outlines `#1C1917`, accents `#F4C430`, `#D35400`, `#7CB342`, lemon mascot in intro/outro. See `references/channel-vi.md`.
-   - **EN (`Squeezing Tech`)**: Dark navy `#0B132B`, glowing vector lines, accents `#76FF03`, `#00E5FF`, `#FFB300`. See `references/channel-en.md`.
-   - Append the verbatim `Negative:` block from `references/channel-vi.md` to EVERY `[VIDEO]` and `[IMG]` prompt.
-
----
-
-## Project Directory Structure
-
-```text
-projects/<project>/
-├── script_vi.txt         # VI script (28-32 lines, 01. -> NN.)
-├── script_en.txt         # EN script (28-32 lines, 01. -> NN.)
-├── prompts_vi_video.txt  # 5-6 [VIDEO] prompts (Scene 01 + Cluster 2/3/4 Openers + Climax)
-├── prompts_vi_img.txt    # 20-23 [IMG] prompts (Cutaways, Bento Cards)
-├── prompts_en_video.txt  # 5-6 [VIDEO] prompts (EN)
-├── prompts_en_img.txt    # 20-23 [IMG] prompts (EN)
-├── video_vi/             # Combined .mp4 + .jpg/.png matched 1:1 with script_vi.txt
-├── video_en/             # Combined .mp4 + .jpg/.png matched 1:1 with script_en.txt
-├── audio_vi/             # Generated VI TTS audio (01_voice.mp3 .. NN_voice.mp3)
-├── audio_en/             # Generated EN TTS audio
-├── youtube_vi.md         # VI YouTube SEO package (Titles, Timestamps, Tags, 16:9 Thumb)
-└── youtube_en.md         # EN YouTube SEO package
-```
+1. **When to Run `video-maker`**:
+   - In V3 Shorts-First workflow, run `video-maker` when a Probe Short proves strong audience demand (`>2,000 views`, `APV > 75%`), OR when the user explicitly asks for a `16:9` Long-form video.
+   - Do **NOT** simply stretch the exact same 6 Short images into 5 minutes — add **real-world failure cases, comparative benchmarks, and deeper physical cutaways** so viewers clicking `Related Video` from the Short feel rewarded immediately!
+2. **Zero Dead Intro at `00:00` (`use_intro=False` Default)**:
+   - `make_video.py` V3 starts directly at `00:00` on **Scene 01 `[VIDEO]`** (no 3-second static logo card killing Autoplay retention!).
+   - Keep every spoken line tight (`10–16 words/line`, `24–28 lines` total) so average scene duration stays **`5.5 – 7.0s`** (`3.5 – 4.2 min` total), never dragging `10–11s` on a static image.
+3. **Script Approval Gate**:
+   - Read `references/script-writing-guide.md` first.
+   - Present the `24–28` line script + 3 Curiosity-Gap `16:9` Titles (`<55 chars`) + 2-line Thumbnail Big Text, and **STOP for user approval** before generating prompts.
+4. **Visual Variety (20% Real-World Context + 80% 2D Cutaway + Moving Mascot)**:
+   - Allocate **6–8 `[VIDEO]` (`.mp4`) scenes**: Scene `01` (00:00 Cold Open Hook), each major section starter, climax mechanism test, plus custom-tailored Outro scenes (`N-1` Survey & `N` Brand Sign-off). Every `[VIDEO]` prompt MUST include the moving nerdy lemon mascot interacting with the hardware.
+   - Insert a **Mid-Roll Value Subscribe Cue** around Scene `14–16` (middle of video, while retention is still high) rather than waiting until the final 5 seconds.
+   - Follow `references/channel-vi.md` color palette (`#FAF7F2`) and append the verbatim `Negative:` block (banning AI text/watermarks/stars).
+5. **Mandatory High-Contrast 16:9 Custom Thumbnail**:
+   - `make_video.py` auto-renders `thumbnail_vi.jpg` with a dark left contrast scrim + giant `96–104px` 2-line Curiosity Text (`--thumb-top` & `--thumb-bottom`). Never upload a Long-form video without a high-contrast thumbnail!
 
 ---
 
 ## 3-Stage Execution Workflow
 
-### Stage 1: Draft High-Retention Script (Stop Gate)
-1. Read `references/script-writing-guide.md`.
-2. Draft `28–32 lines` (10–18 words/line):
-   - **Lines 01–03 (Intro)**: Paradox/Shocking Number -> Core Cause -> Open Loop.
-   - **Lines 04 to N-3 (4 Standalone Clusters)**: 6–7 lines per cluster. Line 1 of each cluster MUST combine **Shocking Number/Pain + Main Topic + Angle**.
-   - **Last 3 Lines (Outro)**: Pocket Rule Payoff -> Numeric Audience Question -> Brand Sign-off.
-3. Display script with the 4 Shorts cluster boundaries and highlight which scenes will be `[VIDEO]` openers.
-4. **STOP GATE**: Ask user to approve before saving files or generating prompts.
+### Stage 1: Draft Crisp `24–28` Line Script & Packaging (Stop Gate)
+1. Draft `24–28` lines (`10–16` words/line):
+   - **Scenes `01–03` (00:00 Cold Open)**: Shocking Cost/Physics Paradox -> Hidden Culprit -> Open Loop Payoff Promise.
+   - **3–4 Crisp Body Sections (`Scenes 04 .. N-3`)**: Physical mechanism cutaways + real-world test benchmarks + 1 mid-roll 1-sentence value Subscribe cue.
+   - **Final 3 Scenes**: Memorable numeric Pocket Rule -> Concrete user comment question -> Brand sign-off.
+2. Propose **Curiosity-Gap Title (`<55 chars`)** + **`--thumb-top` / `--thumb-bottom` (max 3–4 words/line)**.
+3. **STOP GATE**: Wait for user confirmation.
 
-### Stage 2: Save Script & Generate Hybrid Prompts (`[VIDEO]` + `[IMG]` + `[REUSE]`)
-1. Initialize folder if needed: `python make_video.py --new <project>`
-2. Save `script_vi.txt` (skip `script_en.txt` unless `--en` is requested).
-3. Read `references/channel-vi.md`.
-4. Split 1:1 prompts into 3 groups for VI:
-   - `[REUSE]` (**1 Neutral Mascot Intro scene**): Only Scene `03` (`03_mascot_intro.mp4` — neutral lemon beaker graphic) is copied from existing projects. NEVER copy `29_mascot_survey.mp4` or `30_mascot_outro.mp4` from another niche.
-   - `[VIDEO]` (**7–8 animated `.mp4` scenes**): **MUST include Scene `01` (Short 1 hook) + the 3 starter scenes of Clusters 2, 3, 4 (Shorts 2, 3, 4 hooks)** + 1–2 key climax scenes + **Scenes `N-1` (`29`) and `N` (`30`) custom-tailored to the project's main device/topic with the animated lemon mascot**. Save to `prompts_vi_video.txt`.
-   - `[IMG]` (**Remaining 21–22 scenes**): Cutaways, metaphors, and Bento cards. Save to `prompts_vi_img.txt`.
+### Stage 2: Save Script & Generate `16:9` Hybrid Prompts
+1. Ensure project folder exists (`python make_video.py --new <project>` if not already created via `--new-short`).
+2. Save `script_vi.txt`, `prompts_vi_video.txt` (`6–8 [VIDEO] --ar 16:9`), and `prompts_vi_img.txt` (`16–20 [IMG] --ar 16:9`).
 
-### Stage 3: Render Full HD Video & YouTube Package
-1. Run `auto_flow.py` for `prompts_vi_video.txt` (Video Mode) and `prompts_vi_img.txt` (Image Mode).
-2. Assemble all media into `video_vi/` numbered `01_..NN_` matching script lines.
-3. Render 16:9 video: `python make_video.py <project> --lang vi`.
-4. Generate `youtube_vi.md`.
+### Stage 3: Render 16:9 Video + Auto-Thumbnail + Link Winning Short
+1. Place media in `video_vi/` (`01_..NN_`) and clean any Gemini corner star via Studio Watermark tab if needed.
+2. Render 0s-Intro video + high-contrast thumbnail:
+   ```bash
+   python make_video.py <project> --lang vi --thumb-top "<3-4 CHỮ ĐẦU>" --thumb-bottom "<3-4 CHỮ NHẤN>"
+   ```
+3. Generate `youtube_vi.md`, and remind user to link the Probe Short's **Related Video (`▶`)** to this full breakdown!
 
 ## References
-- Script & 4-Cluster Shorts Hook Formula: `references/script-writing-guide.md`
-- VI Channel Style & Prompts: `references/channel-vi.md`
-- EN Channel Style & Prompts: `references/channel-en.md`
+- Script pacing, mid-roll sub trigger & packaging rules: `references/script-writing-guide.md`
+- VI Channel visual prompts (`--ar 16:9` & `--ar 9:16`): `references/channel-vi.md`
+- EN Channel visual prompts: `references/channel-en.md`

@@ -1,30 +1,14 @@
-# HƯỚNG DẪN SẢN XUẤT VIDEO DÀI & SHORTS (VẮT CHANH CÔNG NGHỆ & SQUEEZING TECH)
+# HƯỚNG DẪN VẬN HÀNH NHANH — VẮT CHANH CÔNG NGHỆ (FLOW V3)
 
-Xem quy trình chuẩn từng bước ngắn gọn tại [WORKFLOW.md](WORKFLOW.md).
+Tài liệu quy trình đầy đủ xem tại **[WORKFLOW.md](WORKFLOW.md)**.
 
-## 1. Nhận Diện 2 Kênh
-- **Kênh Tiếng Việt (`Vắt Chanh Công Nghệ`)**:
-  - Slogan: *“Vắt sạch thông số, giữ lại cách dùng”*
-  - Bảng màu: Nền vàng kem ấm `#FAF7F2`, vàng chanh `#F4C430`, cam đất `#D35400`, xanh lá mầm `#7CB342`, nét nâu than `#1C1917`.
-  - Giọng đọc mặc định: `vi-VN-NamMinhNeural`
-- **Kênh Tiếng Anh (`Squeezing Tech`)**:
-  - Slogan: *“Extracting Value from Everyday Tech”*
-  - Bảng màu: Nền xanh đen `#0B132B`, xanh chanh neon `#76FF03`, xanh điện tử `#00E5FF`, vàng hổ phách `#FFB300`.
-  - Giọng đọc mặc định: `en-US-ChristopherNeural`
+## 1. Quy Tắc Vàng Khi Vận Hành Kênh (30 Ngày Tới)
+- **Khóa 1 tệp khán giả**: Chỉ xoay vòng trong trục **Điện – Di động – Sạc nhanh GaN – Xe điện – Wi-Fi** (không nhảy sang lọc nước/bếp núc; không đăng 2 bài liên tiếp trùng 1 món đồ).
+- **Nhịp đăng chuẩn**: **1 Short `9:16` độc lập (`24–34s`)/ngày** vào khung `11h30` hoặc `19h30`. Chủ đề nào đạt **`>2.000 views` & `APV > 75%`** sau 48h mới dựng thêm **1 Video dài `16:9`** (1–2 bài dài/tuần) và gắn nút *Video liên quan* từ Short trỏ sang.
+- **Không lộ đáp án trên Tiêu đề**: Giữ tiêu đề `<55–65 ký tự`, khơi gợi tò mò (Curiosity Gap), tuyệt đối không gắn nhãn `Tập 1/4..4/4` trên Shorts.
 
-## 2. Tóm Tắt 5 Bước Chuẩn
-1. **Khởi tạo**: `python make_video.py --new <ten_project>`
-2. **Kịch bản dài (`script_vi.txt` / `script_en.txt`, 28–32 câu)**:
-   - **Mở đầu (01–03)**: Chạm tình huống thực tế $\rightarrow$ Phá lầm tưởng $\rightarrow$ Lời chào dẫn nhập tự nhiên.
-   - **Thân bài (3–4 cụm độc lập)**: Câu đầu mỗi cụm phải nêu rõ *Chủ đề chính + Khía cạnh cụm* (không dùng *"Nhưng..."*, *"Thủ phạm thứ hai..."*) để tách Shorts không bị cụt ngữ cảnh.
-   - **Lời kết (3 câu cuối)**: Đúc kết thực dụng $\rightarrow$ Hỏi thăm trải nghiệm $\rightarrow$ Lời chào thương hiệu kèm slogan.
-3. **Tạo Prompt & Media (`prompts_vi.txt` / `prompts_en.txt`)**:
-   - Khớp `1:1` với câu thoại, xen kẽ 3 dạng cảnh (*Đời thường / Mặt cắt ẩn dụ / Thẻ Bento Card*).
-   - Tải ảnh/video từ Google Flow vào `video_vi/`, `video_en/` và đánh số `01_` $\rightarrow$ `NN_`.
-4. **Dựng Video Dài 16:9 & Gói YouTube (`youtube_vi.md` / `youtube_en.md`)**:
-   - `python make_video.py <ten_project> --lang vi`
-   - `python make_video.py <ten_project> --lang en`
-5. **Tách 3–4 Tập Shorts 9:16 (`shorts_config_vi.json` / `shorts_config_en.json`)**:
-   - Khai báo `"main_topic"` để hiển thị cố định Chủ đề chính trên pano đầu video (`MAIN_TOPIC • TẬP X/4`).
-   - Đảm bảo `scenes[0]` của mọi tập Short nêu rõ chủ đề chính.
-   - Chạy: `python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_project> --lang vi` (và `--lang en`).
+## 2. Thao Tác Trên Giao Diện Studio (`run_studio.bat`)
+1. Bấm **`+ Tạo Dự Án Mới`** -> Giữ tích chọn **`Chuẩn Shorts-First 9:16 dò đường`** -> Nhập tên dự án.
+2. Duyệt kịch bản 6–7 câu với AI (`/topic-finder` -> `/shorts-maker`), đẩy prompt `--ar 9:16` qua tab **Bot Google Flow**, tải file về `video_short_vi/` (xóa sao AI ở tab **Xóa Star/Logo Gemini** nếu cần) rồi bấm **`🔀 Sort Resource`**.
+3. Bấm **`📱 DỰNG SHORTS 9:16`** -> Tool tự tạo giọng đọc AI (`gemini:voice_5mxlq1k9luls`), dựng video `9:16` tràn viền + phụ đề động `3–5 từ/nhịp` + ảnh bìa + file chữ đăng bài trong `shorts_vi/`.
+4. Khi Short nổ view -> Dùng `/video-maker` tạo bộ `16:9` trong `video_vi/` -> Bấm **`🎬 VIDEO DÀI 16:9`** để xuất video không vướng Intro 3s kèm `thumbnail_vi.jpg` tương phản cao.

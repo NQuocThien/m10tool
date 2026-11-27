@@ -4,10 +4,19 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageDraw, ImageFont
 
-from core.config import FFMPEG_PATH, DEFAULT_FPS, PROJECTS_DIR, RESOURCES_DIR
+from core.config import (
+    FFMPEG_PATH,
+    DEFAULT_FPS,
+    PROJECTS_DIR,
+    RESOURCES_DIR,
+    HIGHLIGHT_UNITS,
+    HIGHLIGHT_KEYWORDS,
+    SHORT_HOOK_BANNER_SEC,
+    SHORT_WORDS_PER_CAPTION,
+)
 from core.sorter import get_sorted_images
 from core.tts import load_script
-from core.subtitles import generate_subtitles
+from core.subtitles import generate_subtitles, compute_caption_cue_timings
 
 # 4 cấu hình YouTube Shorts cho dự án lfp_vs_ncm
 SHORTS_CONFIG = [
@@ -327,18 +336,28 @@ SHORTS_CONFIG_EN = [
 import re
 
 
-_HIGHLIGHT_UNITS = {
-    "triệu", "tỷ", "ngàn", "nghìn", "trăm", "năm", "tháng", "tuần", "ngày",
-    "tiếng", "giờ", "phút", "giây", "lần", "bộ", "cây", "ký", "mét", "vạch",
-    "chu", "kỳ", "배", "million", "billion", "years", "months", "hours",
-    "minutes", "seconds", "cycles", "times", "miles", "kilometers", "percent",
-}
+_HIGHLIGHT_UNITS = HIGHLIGHT_UNITS
+_HIGHLIGHT_KEYWORDS = HIGHLIGHT_KEYWORDS
 
-_HIGHLIGHT_KEYWORDS = {
-    "lfp", "ncm", "bms", "ip67", "ip68", "graphene", "lithium", "lithium-ion",
-    "silicon-carbon", "sulfide", "eco", "sport", "km/h", "wh/kg", "kwh",
-    "mah", "mpa", "usd", "220v", "lab",
-}
+
+def probe_media_dimensions(media_path):
+    """Fast aspect-ratio detector for images and videos; returns (width, height)."""
+    ext = os.path.splitext(media_path)[1].lower()
+    if ext in {".jpg", ".jpeg", ".png", ".webp", ".bmp"}:
+        try:
+            with Image.open(media_path) as im:
+                return im.size
+        except Exception:
+            return (1920, 1080)
+
+    cmd = [FFMPEG_PATH, "-i", media_path]
+    res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
+    for line in res.stderr.splitlines():
+        if "Video:" in line or "Stream #0:" in line:
+            m = re.search(r"(\d{3,5})x(\d{3,5})", line)
+            if m:
+                return (int(m.group(1)), int(m.group(2)))
+    return (1920, 1080)
 
 
 def _load_font(size, bold=True):
@@ -422,20 +441,265 @@ def _draw_highlighted_subtitle_line(
         draw.text((lx, ly), line_str, font=font, fill=normal_fill)
         return
 
-    for i, w in enumerate(words):
-        prefix = " ".join(words[:i]) + (" " if i > 0 else "")
+    # Group consecutive highlighted tokens into a single unified pill (e.g. '150 nghìn', '3 lõi')
+    spans = []
+    idx = 0
+    while idx < len(words):
+        flag = flags[idx]
+        j = idx + 1
+        while j < len(words) and flags[j] == flag:
+            j += 1
+        spans.append((idx, j, flag))
+        idx = j
+
+    for s_i, e_i, is_hi in spans:
+        prefix = " ".join(words[:s_i]) + (" " if s_i > 0 else "")
+        span_str = " ".join(words[s_i:e_i])
         px = lx + (draw.textbbox((0, 0), prefix, font=font)[2] if prefix else 0)
-        wb = draw.textbbox((px, ly), w, font=font)
-        if flags[i]:
+        wb = draw.textbbox((px, ly), span_str, font=font)
+        if is_hi:
             if pill_fill:
                 draw.rounded_rectangle(
-                    (wb[0] - 6, wb[1] - 4, wb[2] + 6, wb[3] + 4),
-                    radius=10,
+                    (wb[0] - 8, wb[1] - 4, wb[2] + 8, wb[3] + 4),
+                    radius=12,
                     fill=pill_fill,
                 )
-            draw.text((px, ly), w, font=font, fill=highlight_fill)
+            draw.text((px, ly), span_str, font=font, fill=highlight_fill)
         else:
-            draw.text((px, ly), w, font=font, fill=normal_fill)
+            draw.text((px, ly), span_str, font=font, fill=normal_fill)
+
+
+def render_hook_banner_png(
+    output_png,
+    title_line1,
+    title_line2="",
+    badge_text="",
+    lang="vi",
+    accent_hex="#D35400",
+):
+    """
+    Renders a 1080x300 RGBA scroll-stopping Hook Banner displayed ONLY during the first ~3.2s
+    of Scene 01, then hidden so full visual storytelling takes over without PowerPoint clutter.
+    """
+    BW, BH = 1080, 236
+    is_en = (lang == "en")
+    img = Image.new("RGBA", (BW, BH), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    accent_clean = accent_hex.lstrip("#")
+    accent_rgb = tuple(int(accent_clean[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
+    is_yellow = accent_clean.upper() in {"F4C430", "FFB300"}
+
+    card_bg = (15, 23, 42, 240) if is_en else (28, 25, 23, 240)
+    border_col = accent_rgb if is_en else (244, 196, 48, 255)
+    t1_col = accent_rgb if (is_en or is_yellow) else (244, 196, 48, 255)
+    t2_col = (248, 250, 252, 255)
+
+    cx1, cy1, cx2, cy2 = 36, 8, BW - 36, BH - 12
+    draw.rounded_rectangle((cx1 + 4, cy1 + 6, cx2 + 4, cy2 + 6), radius=26, fill=(0, 0, 0, 110))
+    draw.rounded_rectangle((cx1, cy1, cx2, cy2), radius=26, fill=card_bg, outline=border_col, width=4)
+
+    y_cursor = cy1 + 18
+    clean_badge = re.sub(r"(?i)\b(tập|tap|episode|ep|part)\s*\d+\s*(/\s*\d+)?\s*[•\-:|]*\s*", "", badge_text or "").strip(" •-:|")
+    if clean_badge:
+        f_b = _load_font(20, bold=True)
+        bb = draw.textbbox((0, 0), clean_badge.upper(), font=f_b)
+        pw = min(cx2 - cx1 - 60, (bb[2] - bb[0]) + 36)
+        px = (BW - pw) // 2
+        draw.rounded_rectangle((px, y_cursor, px + pw, y_cursor + 34), radius=17, fill=accent_rgb)
+        bfg = (20, 18, 16, 255) if is_yellow or is_en else (255, 255, 255, 255)
+        draw.text((BW // 2, y_cursor + 17), clean_badge.upper()[:46], font=f_b, fill=bfg, anchor="mm")
+        y_cursor += 44
+    else:
+        y_cursor += 12
+
+    f_t1 = _load_font(45, bold=True)
+    while f_t1.size > 32 and draw.textbbox((0, 0), title_line1, font=f_t1)[2] > (cx2 - cx1 - 44):
+        f_t1 = _load_font(f_t1.size - 4, bold=True)
+    draw.text((BW // 2, y_cursor + 24), title_line1, font=f_t1, fill=t1_col, anchor="mm")
+    y_cursor += 58
+
+    if title_line2:
+        f_t2 = _load_font(31, bold=True)
+        while f_t2.size > 23 and draw.textbbox((0, 0), title_line2, font=f_t2)[2] > (cx2 - cx1 - 48):
+            f_t2 = _load_font(f_t2.size - 3, bold=True)
+        draw.text((BW // 2, y_cursor + 18), title_line2, font=f_t2, fill=t2_col, anchor="mm")
+
+    img.save(output_png, "PNG")
+    return output_png
+
+
+def render_caption_strip_png(
+    output_png,
+    cue_text,
+    lang="vi",
+    accent_hex="#D35400",
+):
+    """
+    Renders a compact 1080x270 RGBA dynamic pop-in caption pill (3-5 words per beat).
+    Positioned in the safe zone (y=1205..1475), above YouTube Shorts bottom metadata UI.
+    """
+    CW, CH = 1080, 270
+    is_en = (lang == "en")
+    img = Image.new("RGBA", (CW, CH), (0, 0, 0, 0))
+    if not cue_text or not cue_text.strip():
+        img.save(output_png, "PNG")
+        return output_png
+
+    draw = ImageDraw.Draw(img)
+    accent_clean = accent_hex.lstrip("#")
+    accent_rgb = tuple(int(accent_clean[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
+
+    font_cap = _load_font(52, bold=True)
+    max_w = CW - 140
+    lines = _wrap_text_lines(draw, cue_text.strip(), font_cap, max_w)
+    if len(lines) > 2:
+        font_cap = _load_font(44, bold=True)
+        lines = _wrap_text_lines(draw, cue_text.strip(), font_cap, max_w)
+
+    line_h = 68 if font_cap.size >= 50 else 58
+    line_widths = [draw.textbbox((0, 0), ln, font=font_cap)[2] for ln in lines]
+    box_w = min(CW - 64, max(line_widths) + 76)
+    box_h = len(lines) * line_h + 42
+    bx1 = (CW - box_w) // 2
+    by1 = (CH - box_h) // 2
+    bx2 = bx1 + box_w
+    by2 = by1 + box_h
+
+    pill_bg = (11, 19, 43, 232) if is_en else (24, 21, 19, 232)
+    pill_border = accent_rgb if is_en else (244, 196, 48, 235)
+    normal_fg = (255, 255, 255, 255)
+    hi_fg = (11, 19, 43, 255) if is_en else (24, 21, 19, 255)
+    hi_pill = (118, 255, 3, 255) if is_en else (244, 196, 48, 255)
+
+    draw.rounded_rectangle((bx1 + 4, by1 + 6, bx2 + 4, by2 + 6), radius=28, fill=(0, 0, 0, 115))
+    draw.rounded_rectangle((bx1, by1, bx2, by2), radius=28, fill=pill_bg, outline=pill_border, width=3)
+
+    start_y = by1 + 21
+    for idx_l, ln in enumerate(lines):
+        lw = draw.textbbox((0, 0), ln, font=font_cap)[2]
+        lx = (CW - lw) // 2
+        ly = start_y + idx_l * line_h
+        _draw_highlighted_subtitle_line(
+            draw,
+            ln,
+            lx,
+            ly,
+            font_cap,
+            normal_fill=normal_fg,
+            highlight_fill=hi_fg,
+            pill_fill=hi_pill,
+        )
+
+    img.save(output_png, "PNG")
+    return output_png
+
+
+def _build_short_chrome_overlay(
+    output_png,
+    lang="vi",
+    step_label="",
+    accent_hex="#D35400",
+    is_portrait=True,
+    has_related_video=False,
+    static_subtitle_fallback="",
+):
+    """
+    V3 Minimal Chrome Overlay (1080x1920 RGBA):
+    - Mode A (is_portrait=True, 9:16 native): 100% Full-Bleed (0, 0, 1080, 1920)
+    - Mode B (is_portrait=False, 16:9 source): Large 1048x740 center showcase (16, 370, 1048, 740)
+    """
+    W, H = 1080, 1920
+    is_en = (lang == "en")
+    accent_clean = accent_hex.lstrip("#")
+    accent_rgb = tuple(int(accent_clean[i:i + 2], 16) for i in (0, 2, 4)) + (255,)
+
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    if is_portrait:
+        for y in range(180):
+            a = int(88 * ((1.0 - y / 180.0) ** 1.5))
+            draw.line([(0, y), (W, y)], fill=(12, 12, 14, a))
+        vx, vy, vw, vh = 0, 0, W, H
+    else:
+        vx, vy, vw, vh = 16, 398, 1048, 740
+        border_col = accent_rgb if is_en else (28, 25, 23, 255)
+        draw.rounded_rectangle(
+            (vx - 3, vy - 3, vx + vw + 3, vy + vh + 3),
+            radius=28,
+            fill=(0, 0, 0, 0),
+            outline=border_col,
+            width=6,
+        )
+
+    # 1. Slim Top Progress Bar (y = 54..64)
+    cur_sc, tot_sc = _parse_step_progress(step_label)
+    if tot_sc > 0:
+        prog_ratio = max(0.08, min(1.0, cur_sc / tot_sc))
+        pb_x1, pb_y1, pb_x2, pb_y2 = 42, 54, W - 42, 64
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x2, pb_y2), radius=5, fill=(255, 255, 255, 95))
+        fill_w = int((pb_x2 - pb_x1) * prog_ratio)
+        draw.rounded_rectangle((pb_x1, pb_y1, pb_x1 + fill_w, pb_y2), radius=5, fill=accent_rgb)
+
+    # 2. Compact Brand Watermark Pill (y = 80..134)
+    pill_w, pill_h = (410 if is_en else 450), 54
+    pill_x = (W - pill_w) // 2
+    pill_y = 80
+    pill_bg = (11, 19, 43, 215) if is_en else (255, 253, 249, 222)
+    pill_outline = (0, 229, 255, 220) if is_en else (28, 25, 23, 210)
+    brand_fg = (0, 229, 255, 255) if is_en else (28, 25, 23, 255)
+
+    draw.rounded_rectangle(
+        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
+        radius=27,
+        fill=pill_bg,
+        outline=pill_outline,
+        width=2,
+    )
+    if is_en:
+        _draw_squeezing_tech_emblem(draw, pill_x + 32, pill_y + 27, r=18)
+        f_brand = _load_font(23, bold=True)
+        draw.text((pill_x + 64, pill_y + 13), "SQUEEZING TECH", font=f_brand, fill=brand_fg)
+    else:
+        logo_path = os.path.join(RESOURCES_DIR, "logo_vi.jpg")
+        if os.path.exists(logo_path):
+            try:
+                logo = Image.open(logo_path).convert("RGBA").resize((38, 38), Image.LANCZOS)
+                mask = Image.new("L", (38, 38), 0)
+                ImageDraw.Draw(mask).ellipse((0, 0, 38, 38), fill=255)
+                img.paste(logo, (pill_x + 12, pill_y + 8), mask)
+            except Exception:
+                pass
+        f_brand = _load_font(22, bold=True)
+        draw.text((pill_x + 62, pill_y + 14), "VẮT CHANH CÔNG NGHỆ", font=f_brand, fill=brand_fg)
+
+    if static_subtitle_fallback:
+        tmp_cap = output_png + "._cap_preview.png"
+        try:
+            render_caption_strip_png(tmp_cap, static_subtitle_fallback, lang=lang, accent_hex=accent_hex)
+            if os.path.exists(tmp_cap):
+                cap_im = Image.open(tmp_cap).convert("RGBA")
+                img.alpha_composite(cap_im, (0, 1205))
+        finally:
+            if os.path.exists(tmp_cap):
+                try:
+                    os.remove(tmp_cap)
+                except Exception:
+                    pass
+
+    if has_related_video and tot_sc > 0 and cur_sc == tot_sc:
+        cta_w, cta_h = 780, 54
+        cta_x, cta_y = (W - cta_w) // 2, 1490
+        cta_fill = (118, 255, 3, 240) if is_en else (211, 84, 0, 240)
+        cta_fg = (11, 19, 43, 255) if is_en else (255, 255, 255, 255)
+        draw.rounded_rectangle((cta_x, cta_y, cta_x + cta_w, cta_y + cta_h), radius=27, fill=cta_fill, outline=(255, 255, 255, 220), width=2)
+        f_cta = _load_font(24, bold=True)
+        cta_txt = "▶ TAP RELATED VIDEO BELOW FOR FULL BREAKDOWN" if is_en else "▶ BẤM VIDEO LIÊN QUAN GÓC DƯỚI XEM BẢN ĐẦY ĐỦ"
+        draw.text((W // 2, cta_y + cta_h // 2), cta_txt, font=f_cta, fill=cta_fg, anchor="mm")
+
+    img.save(output_png, "PNG")
+    return (vx, vy, vw, vh)
 
 
 def create_short_overlay(
@@ -446,227 +710,20 @@ def create_short_overlay(
     subtitle_text="",
     step_label="",
     accent_hex="#D35400",
+    is_portrait=True,
+    has_related_video=False,
 ):
-    """
-    Tạo khung overlay 1080x1920 (RGBA) V2 chống Mù Mẫu Thị Giác cho Kênh Vắt Chanh Công Nghệ (#FAF7F2):
-    - Đổi màu tint Header Card, dải Top Bar và viền Khung Video theo accent_hex của từng Tập
-    - Mở rộng cửa sổ Video trung tâm lên 1040x700 (x=20..1060, y=462..1162) + Thanh Progress Bar
-    - Tự động highlight màu nổi bật cho Con số & Từ khóa trong khung Phụ đề
-    - Tự động bật thanh nhắc Video liên quan ngay ở cảnh cuối cùng của tập
-    """
-    W, H = 1080, 1920
-    bg_cream = (250, 247, 242, 255)      # #FAF7F2
-    charcoal = (28, 25, 23, 255)         # #1C1917
-    card_white = (255, 253, 249, 255)    # #FFFDF9
-    lemon_yellow = (244, 196, 48, 255)   # #F4C430
-    terracotta = (211, 84, 0, 255)       # #D35400
-    lime_green = (124, 179, 66, 255)     # #7CB342
-    muted_gray = (120, 113, 108, 255)
-
-    accent_hex_clean = accent_hex.lstrip("#")
-    accent_rgb = tuple(int(accent_hex_clean[i:i+2], 16) for i in (0, 2, 4)) + (255,)
-    is_yellow_accent = accent_hex_clean.upper() == "F4C430"
-    title_accent_fg = terracotta if is_yellow_accent else accent_rgb
-    card_tinted = _blend_rgba(card_white, accent_rgb, 0.08)
-
-    img = Image.new("RGBA", (W, H), bg_cream)
-    draw = ImageDraw.Draw(img)
-
-    # 1. Họa tiết trang trí góc theo màu accent của tập
-    draw.ellipse((-120, -120, 230, 230), fill=(accent_rgb[0], accent_rgb[1], accent_rgb[2], 42))
-    draw.ellipse((W - 240, H - 360, W + 120, H), fill=(124, 179, 66, 32))
-
-    # 2. Header Brand Pill (y = 82..152)
-    logo_path = os.path.join(RESOURCES_DIR, "logo_vi.jpg")
-    pill_w, pill_h = 510, 70
-    pill_x = (W - pill_w) // 2
-    pill_y = 82
-    draw.rounded_rectangle(
-        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=35,
-        fill=card_white,
-        outline=charcoal,
-        width=3,
+    """V3 VI Short Chrome Overlay: Full-bleed (0,0,1080,1920) for 9:16 or large showcase (16,370,1048,740) for 16:9."""
+    preview_chunk = subtitle_text.split(".")[0][:42] if subtitle_text else ""
+    return _build_short_chrome_overlay(
+        output_png,
+        lang="vi",
+        step_label=step_label,
+        accent_hex=accent_hex,
+        is_portrait=is_portrait,
+        has_related_video=has_related_video,
+        static_subtitle_fallback=preview_chunk,
     )
-
-    if os.path.exists(logo_path):
-        try:
-            logo = Image.open(logo_path).convert("RGBA").resize((52, 52), Image.LANCZOS)
-            mask = Image.new("L", (52, 52), 0)
-            ImageDraw.Draw(mask).ellipse((0, 0, 52, 52), fill=255)
-            img.paste(logo, (pill_x + 14, pill_y + 9), mask)
-        except Exception:
-            pass
-
-    font_brand = _load_font(27, bold=True)
-    draw.text((pill_x + 80, pill_y + 19), "VẮT CHANH CÔNG NGHỆ", font=font_brand, fill=charcoal)
-
-    # 3. Bento Title Card (y = 176..472) — Biến thiên màu theo Tập
-    card_x1, card_y1, card_x2, card_y2 = 32, 176, W - 32, 472
-    draw.rounded_rectangle(
-        (card_x1 + 6, card_y1 + 8, card_x2 + 6, card_y2 + 8),
-        radius=28,
-        fill=(accent_rgb[0], accent_rgb[1], accent_rgb[2], 55),
-    )
-    draw.rounded_rectangle(
-        (card_x1, card_y1, card_x2, card_y2),
-        radius=28,
-        fill=card_tinted,
-        outline=charcoal,
-        width=4,
-    )
-
-    # Badge tập (hỗ trợ hiển thị Chủ đề chính + Tập, tự co chữ nếu dài)
-    font_badge = _load_font(23, bold=True)
-    b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 76):
-        font_badge = _load_font(19, bold=True)
-        b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    b_w = (b_bbox[2] - b_bbox[0]) + 44
-    b_h = 46
-    b_x = (W - b_w) // 2
-    b_y = card_y1 + 22
-    draw.rounded_rectangle(
-        (b_x, b_y, b_x + b_w, b_y + b_h),
-        radius=23,
-        fill=accent_rgb,
-        outline=charcoal,
-        width=2,
-    )
-    badge_fg = charcoal if is_yellow_accent else (255, 255, 255, 255)
-    text_offset_y = (b_h - (b_bbox[3] - b_bbox[1])) // 2 - b_bbox[1]
-    draw.text((b_x + 22, b_y + text_offset_y), badge_text, font=font_badge, fill=badge_fg)
-
-    # Title Line 1
-    font_t1 = _load_font(50, bold=True)
-    t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
-    t1_w = t1_bbox[2] - t1_bbox[0]
-    if t1_w > (card_x2 - card_x1 - 36):
-        font_t1 = _load_font(42, bold=True)
-        t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
-        t1_w = t1_bbox[2] - t1_bbox[0]
-    draw.text(((W - t1_w) // 2, card_y1 + 88), title_line1, font=font_t1, fill=title_accent_fg)
-
-    # Title Line 2
-    font_t2 = _load_font(36, bold=True)
-    t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
-    t2_w = t2_bbox[2] - t2_bbox[0]
-    if t2_w > (card_x2 - card_x1 - 40):
-        font_t2 = _load_font(32, bold=True)
-        t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
-        t2_w = t2_bbox[2] - t2_bbox[0]
-    draw.text(((W - t2_w) // 2, card_y1 + 162), title_line2, font=font_t2, fill=charcoal)
-
-    # Thanh nhấn 3 màu thương hiệu
-    bar_w = 240
-    bar_x = (W - bar_w) // 2
-    bar_y = card_y2 - 26
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + 75, bar_y + 8), radius=4, fill=lemon_yellow)
-    draw.rounded_rectangle((bar_x + 82, bar_y, bar_x + 157, bar_y + 8), radius=4, fill=terracotta)
-    draw.rounded_rectangle((bar_x + 164, bar_y, bar_x + 240, bar_y + 8), radius=4, fill=lime_green)
-
-    # 4. Cửa sổ Video 16:9 Tràn Ngang Tối Đa (x = 16..1064, y = 505..1095 -> 1048x590 chuẩn 16:9, không cắt mất 2 bên)
-    vx1, vy1, vx2, vy2 = 16, 505, 1064, 1095
-    draw.rounded_rectangle(
-        (vx1 + 6, vy1 + 8, vx2 + 6, vy2 + 8),
-        radius=26,
-        fill=(28, 25, 23, 45),
-    )
-    draw.rounded_rectangle(
-        (vx1, vy1, vx2, vy2),
-        radius=24,
-        fill=(0, 0, 0, 0),
-        outline=charcoal,
-        width=6,
-    )
-
-    # Thanh tiến độ cảnh (Scene Progress Bar) ngay dưới khung video
-    cur_sc, tot_sc = _parse_step_progress(step_label)
-    if tot_sc > 0:
-        prog_ratio = max(0.08, min(1.0, cur_sc / tot_sc))
-        pb_x1, pb_y1, pb_x2, pb_y2 = 36, 1112, W - 36, 1124
-        draw.rounded_rectangle((pb_x1, pb_y1, pb_x2, pb_y2), radius=6, fill=(230, 224, 214, 255), outline=charcoal, width=1)
-        fill_w = int((pb_x2 - pb_x1) * prog_ratio)
-        draw.rounded_rectangle((pb_x1, pb_y1, pb_x1 + fill_w, pb_y2), radius=6, fill=accent_rgb)
-
-    # 5. Khung Bento chứa Phụ đề có Highlight Từ Khóa (y = 1146..1536)
-    sx1, sy1, sx2, sy2 = 32, 1146, W - 32, 1536
-    draw.rounded_rectangle(
-        (sx1 + 5, sy1 + 6, sx2 + 5, sy2 + 6),
-        radius=26,
-        fill=(28, 25, 23, 25),
-    )
-    draw.rounded_rectangle(
-        (sx1, sy1, sx2, sy2),
-        radius=26,
-        fill=card_white,
-        outline=charcoal,
-        width=3,
-    )
-    # Nhãn góc trên khung phụ đề
-    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=accent_rgb, outline=charcoal, width=2)
-    font_sub_tag = _load_font(22, bold=True)
-    draw.text((sx1 + 60, sy1 + 19), "ĐIỂM CỐT LÕI", font=font_sub_tag, fill=title_accent_fg)
-    if step_label:
-        sp_bbox = draw.textbbox((0, 0), step_label, font=font_sub_tag)
-        draw.text((sx2 - (sp_bbox[2] - sp_bbox[0]) - 32, sy1 + 19), step_label, font=font_sub_tag, fill=muted_gray)
-    draw.line((sx1 + 32, sy1 + 56, sx2 - 32, sy1 + 56), fill=(230, 224, 214, 255), width=2)
-
-    # Vẽ câu thoại căn giữa + tô nổi bật Con Số & Từ Khóa
-    if subtitle_text:
-        font_sub = _load_font(39, bold=True)
-        max_sub_w = (sx2 - sx1) - 68
-        lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
-        if len(lines) > 4:
-            font_sub = _load_font(34, bold=True)
-            lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
-
-        line_h = 56
-        total_text_h = len(lines) * line_h
-        avail_y1 = sy1 + 64
-        avail_y2 = sy2 - 16
-        start_y = avail_y1 + max(0, (avail_y2 - avail_y1 - total_text_h) // 2)
-
-        for idx_l, line_str in enumerate(lines):
-            lb = draw.textbbox((0, 0), line_str, font=font_sub)
-            lw = lb[2] - lb[0]
-            lx = sx1 + ((sx2 - sx1) - lw) // 2
-            ly = start_y + idx_l * line_h
-            _draw_highlighted_subtitle_line(
-                draw,
-                line_str,
-                lx,
-                ly,
-                font_sub,
-                normal_fill=charcoal,
-                highlight_fill=terracotta,
-                pill_fill=(244, 196, 48, 85),
-            )
-
-    # 6. Footer Slogan hoặc In-Scene CTA Pill ở cảnh cuối (y = 1572..1642)
-    if tot_sc > 0 and cur_sc == tot_sc:
-        cta_w, cta_h = 860, 62
-        cta_x, cta_y = (W - cta_w) // 2, 1572
-        draw.rounded_rectangle(
-            (cta_x, cta_y, cta_x + cta_w, cta_y + cta_h),
-            radius=31,
-            fill=terracotta,
-            outline=charcoal,
-            width=3,
-        )
-        font_cta = _load_font(27, bold=True)
-        cta_txt = "▶ BẤM VIDEO LIÊN QUAN GÓC DƯỚI ĐỂ XEM FULL"
-        cb = draw.textbbox((0, 0), cta_txt, font=font_cta)
-        draw.text(((W - (cb[2] - cb[0])) // 2, cta_y + 16), cta_txt, font=font_cta, fill=(255, 255, 255, 255))
-    else:
-        font_slogan = _load_font(25, bold=False)
-        slogan_txt = "“Vắt sạch thông số, giữ lại cách dùng”"
-        s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
-        s_w = s_bbox[2] - s_bbox[0]
-        draw.text(((W - s_w) // 2, 1585), slogan_txt, font=font_slogan, fill=muted_gray)
-
-    img.save(output_png, "PNG")
-    return (vx1, vy1, vx2 - vx1, vy2 - vy1)
 
 
 def _draw_squeezing_tech_emblem(draw, cx, cy, r=28):
@@ -677,17 +734,13 @@ def _draw_squeezing_tech_emblem(draw, cx, cy, r=28):
     amber = (255, 179, 0, 255)
 
     draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=navy_dark, outline=neon_lime, width=3)
-    # Thân pin ở tâm
-    bw, bh = 20, 28
+    bw, bh = max(12, int(r * 0.72)), max(16, int(r * 1.0))
     bx1, by1 = cx - bw // 2, cy - bh // 2 + 2
     bx2, by2 = cx + bw // 2, cy + bh // 2 + 2
-    draw.rounded_rectangle((bx1, by1, bx2, by2), radius=4, fill=navy_dark, outline=elec_cyan, width=2)
-    # Đầu cực dương
-    draw.rectangle((cx - 5, by1 - 4, cx + 5, by1), fill=elec_cyan)
-    # 3 vạch năng lượng phát sáng
-    draw.rectangle((bx1 + 4, by2 - 7, bx2 - 4, by2 - 4), fill=neon_lime)
-    draw.rectangle((bx1 + 4, by2 - 14, bx2 - 4, by2 - 11), fill=neon_lime)
-    draw.rectangle((bx1 + 4, by2 - 21, bx2 - 4, by2 - 18), fill=amber)
+    draw.rounded_rectangle((bx1, by1, bx2, by2), radius=3, fill=navy_dark, outline=elec_cyan, width=2)
+    draw.rectangle((cx - 4, by1 - 3, cx + 4, by1), fill=elec_cyan)
+    draw.rectangle((bx1 + 3, by2 - 6, bx2 - 3, by2 - 3), fill=neon_lime)
+    draw.rectangle((bx1 + 3, by2 - 12, bx2 - 3, by2 - 9), fill=amber)
 
 
 def create_short_overlay_en(
@@ -698,278 +751,151 @@ def create_short_overlay_en(
     subtitle_text="",
     step_label="",
     accent_hex="#00E5FF",
+    is_portrait=True,
+    has_related_video=False,
 ):
-    """
-    Tạo khung overlay 1080x1920 (RGBA) V2 chống Mù Mẫu Thị Giác cho Kênh Squeezing Tech (#0B132B):
-    - Đổi màu viền/tint Header Card và Khung Video theo accent_hex của từng Tập
-    - Mở rộng cửa sổ Video trung tâm lên 1040x700 (x=20..1060, y=462..1162) + Thanh Progress Bar
-    - Tự động highlight màu nổi bật cho Con số & Từ khóa trong khung Phụ đề
-    - Tự động bật thanh nhắc Related Video ngay ở cảnh cuối cùng của tập
-    """
-    W, H = 1080, 1920
-    bg_navy = (11, 19, 43, 255)          # #0B132B
-    card_slate = (19, 31, 66, 255)       # #131F42
-    neon_lime = (118, 255, 3, 255)       # #76FF03
-    elec_cyan = (0, 229, 255, 255)       # #00E5FF
-    amber = (255, 179, 0, 255)           # #FFB300
-    white_text = (248, 250, 252, 255)    # #F8FAFC
-    muted_slate = (148, 163, 184, 255)   # #94A3B8
-
-    accent_hex_clean = accent_hex.lstrip("#")
-    accent_rgb = tuple(int(accent_hex_clean[i:i+2], 16) for i in (0, 2, 4)) + (255,)
-    card_tinted = _blend_rgba(card_slate, accent_rgb, 0.14)
-
-    img = Image.new("RGBA", (W, H), bg_navy)
-    draw = ImageDraw.Draw(img)
-
-    # 1. Họa tiết quầng sáng công nghệ ở góc trên & dưới
-    draw.ellipse((-120, -120, 240, 240), fill=(accent_rgb[0] // 4, accent_rgb[1] // 4, accent_rgb[2] // 4, 255))
-    draw.ellipse((W - 240, H - 360, W + 120, H), fill=(18, 46, 52, 255))
-
-    # 2. Header Brand Pill (y = 82..152)
-    pill_w, pill_h = 460, 70
-    pill_x = (W - pill_w) // 2
-    pill_y = 82
-    draw.rounded_rectangle(
-        (pill_x, pill_y, pill_x + pill_w, pill_y + pill_h),
-        radius=35,
-        fill=card_slate,
-        outline=elec_cyan,
-        width=3,
-    )
-    _draw_squeezing_tech_emblem(draw, pill_x + 44, pill_y + 35, r=24)
-
-    font_brand = _load_font(29, bold=True)
-    draw.text((pill_x + 84, pill_y + 18), "SQUEEZING TECH", font=font_brand, fill=elec_cyan)
-
-    # 3. Bento Title Card (y = 176..472) — Biến thiên màu theo Tập
-    card_x1, card_y1, card_x2, card_y2 = 32, 176, W - 32, 472
-    draw.rounded_rectangle(
-        (card_x1 + 6, card_y1 + 8, card_x2 + 6, card_y2 + 8),
-        radius=28,
-        fill=(5, 10, 24, 255),
-    )
-    draw.rounded_rectangle(
-        (card_x1, card_y1, card_x2, card_y2),
-        radius=28,
-        fill=card_tinted,
-        outline=accent_rgb,
-        width=3,
+    """V3 EN Short Chrome Overlay: Full-bleed (0,0,1080,1920) for 9:16 or large showcase (16,370,1048,740) for 16:9."""
+    preview_chunk = subtitle_text.split(".")[0][:42] if subtitle_text else ""
+    return _build_short_chrome_overlay(
+        output_png,
+        lang="en",
+        step_label=step_label,
+        accent_hex=accent_hex,
+        is_portrait=is_portrait,
+        has_related_video=has_related_video,
+        static_subtitle_fallback=preview_chunk,
     )
 
-    # Episode Badge (hỗ trợ hiển thị Main Topic + Episode, tự co chữ nếu dài)
-    font_badge = _load_font(22, bold=True)
-    b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    if (b_bbox[2] - b_bbox[0]) > (card_x2 - card_x1 - 76):
-        font_badge = _load_font(19, bold=True)
-        b_bbox = draw.textbbox((0, 0), badge_text, font=font_badge)
-    b_w = (b_bbox[2] - b_bbox[0]) + 44
-    b_h = 46
-    b_x = (W - b_w) // 2
-    b_y = card_y1 + 22
-    draw.rounded_rectangle(
-        (b_x, b_y, b_x + b_w, b_y + b_h),
-        radius=23,
-        fill=accent_rgb,
-        outline=bg_navy,
-        width=2,
-    )
-    text_offset_y = (b_h - (b_bbox[3] - b_bbox[1])) // 2 - b_bbox[1]
-    draw.text((b_x + 22, b_y + text_offset_y), badge_text, font=font_badge, fill=bg_navy)
 
-    # Title Line 1
-    font_t1 = _load_font(46, bold=True)
-    t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
-    t1_w = t1_bbox[2] - t1_bbox[0]
-    if t1_w > (card_x2 - card_x1 - 36):
-        font_t1 = _load_font(40, bold=True)
-        t1_bbox = draw.textbbox((0, 0), title_line1, font=font_t1)
-        t1_w = t1_bbox[2] - t1_bbox[0]
-    draw.text(((W - t1_w) // 2, card_y1 + 88), title_line1, font=font_t1, fill=accent_rgb)
-
-    # Title Line 2
-    font_t2 = _load_font(34, bold=True)
-    t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
-    t2_w = t2_bbox[2] - t2_bbox[0]
-    if t2_w > (card_x2 - card_x1 - 40):
-        font_t2 = _load_font(30, bold=True)
-        t2_bbox = draw.textbbox((0, 0), title_line2, font=font_t2)
-        t2_w = t2_bbox[2] - t2_bbox[0]
-    draw.text(((W - t2_w) // 2, card_y1 + 162), title_line2, font=font_t2, fill=white_text)
-
-    # Thanh nhấn 3 màu thương hiệu
-    bar_w = 240
-    bar_x = (W - bar_w) // 2
-    bar_y = card_y2 - 26
-    draw.rounded_rectangle((bar_x, bar_y, bar_x + 75, bar_y + 8), radius=4, fill=neon_lime)
-    draw.rounded_rectangle((bar_x + 82, bar_y, bar_x + 157, bar_y + 8), radius=4, fill=elec_cyan)
-    draw.rounded_rectangle((bar_x + 164, bar_y, bar_x + 240, bar_y + 8), radius=4, fill=amber)
-
-    # 4. Cửa sổ Video 16:9 Tràn Ngang Tối Đa (x = 16..1064, y = 505..1095 -> 1048x590 chuẩn 16:9, không cắt mất 2 bên)
-    vx1, vy1, vx2, vy2 = 16, 505, 1064, 1095
-    draw.rounded_rectangle(
-        (vx1 + 6, vy1 + 8, vx2 + 6, vy2 + 8),
-        radius=26,
-        fill=(0, 0, 0, 110),
-    )
-    draw.rounded_rectangle(
-        (vx1, vy1, vx2, vy2),
-        radius=24,
-        fill=(0, 0, 0, 0),
-        outline=accent_rgb,
-        width=5,
-    )
-
-    # Thanh tiến độ cảnh (Scene Progress Bar) ngay dưới khung video
-    cur_sc, tot_sc = _parse_step_progress(step_label)
-    if tot_sc > 0:
-        prog_ratio = max(0.08, min(1.0, cur_sc / tot_sc))
-        pb_x1, pb_y1, pb_x2, pb_y2 = 36, 1112, W - 36, 1124
-        draw.rounded_rectangle((pb_x1, pb_y1, pb_x2, pb_y2), radius=6, fill=(19, 31, 66, 255), outline=elec_cyan, width=1)
-        fill_w = int((pb_x2 - pb_x1) * prog_ratio)
-        draw.rounded_rectangle((pb_x1, pb_y1, pb_x1 + fill_w, pb_y2), radius=6, fill=accent_rgb)
-
-    # 5. Khung Bento chứa Phụ đề có Highlight Từ Khóa (y = 1146..1536)
-    sx1, sy1, sx2, sy2 = 32, 1146, W - 32, 1536
-    draw.rounded_rectangle(
-        (sx1 + 5, sy1 + 6, sx2 + 5, sy2 + 6),
-        radius=26,
-        fill=(0, 0, 0, 85),
-    )
-    draw.rounded_rectangle(
-        (sx1, sy1, sx2, sy2),
-        radius=26,
-        fill=card_slate,
-        outline=elec_cyan,
-        width=3,
-    )
-    # Nhãn góc trên khung phụ đề
-    draw.ellipse((sx1 + 32, sy1 + 22, sx1 + 50, sy1 + 40), fill=accent_rgb)
-    font_sub_tag = _load_font(22, bold=True)
-    draw.text((sx1 + 60, sy1 + 19), "KEY TAKEAWAY", font=font_sub_tag, fill=accent_rgb)
-    if step_label:
-        sp_bbox = draw.textbbox((0, 0), step_label, font=font_sub_tag)
-        draw.text((sx2 - (sp_bbox[2] - sp_bbox[0]) - 32, sy1 + 19), step_label, font=font_sub_tag, fill=muted_slate)
-    draw.line((sx1 + 32, sy1 + 56, sx2 - 32, sy1 + 56), fill=(38, 56, 105, 255), width=2)
-
-    # Vẽ câu thoại căn giữa + tô nổi bật Con Số & Từ Khóa
-    if subtitle_text:
-        font_sub = _load_font(39, bold=True)
-        max_sub_w = (sx2 - sx1) - 68
-        lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
-        if len(lines) > 4:
-            font_sub = _load_font(34, bold=True)
-            lines = _wrap_text_lines(draw, subtitle_text, font_sub, max_sub_w)
-
-        line_h = 56
-        total_text_h = len(lines) * line_h
-        avail_y1 = sy1 + 64
-        avail_y2 = sy2 - 16
-        start_y = avail_y1 + max(0, (avail_y2 - avail_y1 - total_text_h) // 2)
-
-        for idx_l, line_str in enumerate(lines):
-            lb = draw.textbbox((0, 0), line_str, font=font_sub)
-            lw = lb[2] - lb[0]
-            lx = sx1 + ((sx2 - sx1) - lw) // 2
-            ly = start_y + idx_l * line_h
-            _draw_highlighted_subtitle_line(
-                draw,
-                line_str,
-                lx,
-                ly,
-                font_sub,
-                normal_fill=white_text,
-                highlight_fill=neon_lime,
-                pill_fill=(118, 255, 3, 38),
-            )
-
-    # 6. Footer Slogan hoặc In-Scene CTA Pill ở cảnh cuối (y = 1572..1642)
-    if tot_sc > 0 and cur_sc == tot_sc:
-        cta_w, cta_h = 860, 62
-        cta_x, cta_y = (W - cta_w) // 2, 1572
-        draw.rounded_rectangle(
-            (cta_x, cta_y, cta_x + cta_w, cta_y + cta_h),
-            radius=31,
-            fill=neon_lime,
-            outline=bg_navy,
-            width=3,
-        )
-        font_cta = _load_font(26, bold=True)
-        cta_txt = "▶ TAP RELATED VIDEO BELOW FOR FULL BREAKDOWN"
-        cb = draw.textbbox((0, 0), cta_txt, font=font_cta)
-        draw.text(((W - (cb[2] - cb[0])) // 2, cta_y + 17), cta_txt, font=font_cta, fill=bg_navy)
-    else:
-        font_slogan = _load_font(25, bold=False)
-        slogan_txt = "“Extracting Value from Everyday Tech”"
-        s_bbox = draw.textbbox((0, 0), slogan_txt, font=font_slogan)
-        s_w = s_bbox[2] - s_bbox[0]
-        draw.text(((W - s_w) // 2, 1585), slogan_txt, font=font_slogan, fill=muted_slate)
-
-    img.save(output_png, "PNG")
-    return (vx1, vy1, vx2 - vx1, vy2 - vy1)
-
-
-def _render_short_scene(order_idx, media_path, audio_path, dur, overlay_png, box_rect, fps, temp_dir, bg_hex="#FAF7F2"):
+def _render_short_scene(
+    order_idx,
+    media_path,
+    audio_path,
+    dur,
+    overlay_png,
+    box_rect,
+    fps,
+    temp_dir,
+    bg_hex="#FAF7F2",
+    subtitle_text="",
+    lang="vi",
+    accent_hex="#D35400",
+    hook_banner_png=None,
+    hook_duration=SHORT_HOOK_BANNER_SEC,
+):
     vx, vy, vw, vh = box_rect
+    is_full_bleed = (vw == 1080 and vh == 1920)
     clip_path = os.path.join(temp_dir, f"short_clip_{order_idx:02d}.mp4")
     ext = os.path.splitext(media_path)[1].lower()
     is_vid = ext in {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}
 
+    cues = compute_caption_cue_timings(subtitle_text, dur, max_words=SHORT_WORDS_PER_CAPTION) if subtitle_text else []
+    cue_pngs = []
+    for c_idx, cue in enumerate(cues):
+        if not cue["text"].strip():
+            continue
+        c_png = os.path.join(temp_dir, f"sc{order_idx:02d}_cap_{c_idx:02d}.png")
+        render_caption_strip_png(c_png, cue["text"], lang=lang, accent_hex=accent_hex)
+        cue_pngs.append((c_png, cue["start"], cue["end"]))
+
+    filter_parts = []
     if is_vid:
-        filter_complex = (
-            f"[0:v]scale={vw}:{vh}:force_original_aspect_ratio=increase,crop={vw}:{vh},fps={fps}[vid];"
-            f"color=c={bg_hex}:s=1080x1920:r={fps}[bg];"
-            f"[bg][vid]overlay={vx}:{vy}:shortest=1[tmp];"
-            f"[tmp][2:v]overlay=0:0:shortest=1,format=yuv420p[outv]"
-        )
-        cmd = [
-            FFMPEG_PATH, "-y",
-            "-stream_loop", "-1",
-            "-t", f"{dur:.3f}",
-            "-i", media_path,
-            "-i", audio_path,
-            "-loop", "1", "-t", f"{dur:.3f}", "-i", overlay_png,
-            "-filter_complex", filter_complex,
-            "-map", "[outv]",
-            "-map", "1:a:0",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-            "-shortest",
-            clip_path,
-        ]
+        if is_full_bleed:
+            filter_parts.append(
+                f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps={fps}[basev]"
+            )
+        else:
+            tint_alpha = "0.74" if lang == "en" else "0.76"
+            filter_parts.append(
+                f"[0:v]fps={fps},split=2[vsrc1][vsrc2];"
+                f"[vsrc1]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:4[blur];"
+                f"color=c={bg_hex}@{tint_alpha}:s=1080x1920:r={fps}[tint];"
+                f"[blur][tint]overlay=0:0:shortest=1[amb];"
+                f"[vsrc2]scale={vw}:{vh}:force_original_aspect_ratio=increase,crop={vw}:{vh}[fg];"
+                f"[amb][fg]overlay={vx}:{vy}:shortest=1[basev]"
+            )
     else:
         total_frames = max(1, int(dur * fps))
-        max_zoom = 1.15
+        max_zoom = 1.14
         step = (max_zoom - 1.00) / max(1, total_frames)
         if order_idx % 2 == 1:
             zoom_expr = f"min(zoom+{step:.6f},{max_zoom})"
         else:
             zoom_expr = f"max({max_zoom}-on*{step:.6f},1.00)"
+        pan_sign = "+" if (order_idx % 4 in (1, 2)) else "-"
+        x_expr = f"iw/2-(iw/zoom/2){pan_sign}(iw-iw/zoom)*0.20*(on/{max(1, total_frames)})"
 
-        filter_complex = (
-            f"[0:v]scale={vw}:{vh}:force_original_aspect_ratio=increase,crop={vw}:{vh},"
-            f"zoompan=z='{zoom_expr}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={total_frames}:s={vw}x{vh}:fps={fps}[vid];"
-            f"color=c={bg_hex}:s=1080x1920:r={fps}[bg];"
-            f"[bg][vid]overlay={vx}:{vy}:shortest=1[tmp];"
-            f"[tmp][2:v]overlay=0:0:shortest=1,format=yuv420p[outv]"
+        if is_full_bleed:
+            filter_parts.append(
+                f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
+                f"zoompan=z='{zoom_expr}':x='{x_expr}':y='ih/2-(ih/zoom/2)':d={total_frames}:s=1080x1920:fps={fps}[basev]"
+            )
+        else:
+            tint_alpha = "0.74" if lang == "en" else "0.76"
+            filter_parts.append(
+                f"[0:v]split=2[isrc1][isrc2];"
+                f"[isrc1]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=24:4[blur];"
+                f"color=c=#000000:s=1080x1920:r={fps}:d={dur:.3f}[bg0];"
+                f"[bg0][blur]overlay=0:0:eof_action=repeat[bg1];"
+                f"color=c={bg_hex}@{tint_alpha}:s=1080x1920:r=1[tint];"
+                f"[bg1][tint]overlay=0:0:eof_action=repeat[amb];"
+                f"[isrc2]scale={vw}:{vh}:force_original_aspect_ratio=increase,crop={vw}:{vh},"
+                f"zoompan=z='{zoom_expr}':x='{x_expr}':y='ih/2-(ih/zoom/2)':d={total_frames}:s={vw}x{vh}:fps={fps}[fg];"
+                f"[amb][fg]overlay={vx}:{vy}:shortest=1[basev]"
+            )
+
+    extra_inputs = ["-i", overlay_png]
+    cur_label = "v_chr"
+    filter_parts.append(f"[basev][2:v]overlay=0:0:eof_action=repeat[{cur_label}]")
+    next_in_idx = 3
+
+    if hook_banner_png and os.path.isfile(hook_banner_png):
+        extra_inputs.extend(["-i", hook_banner_png])
+        nxt_label = "v_hk"
+        end_hk = min(dur, float(hook_duration))
+        filter_parts.append(
+            f"[{cur_label}][{next_in_idx}:v]overlay=0:152:eof_action=repeat:enable='between(t,0,{end_hk:.2f})'[{nxt_label}]"
         )
-        cmd = [
-            FFMPEG_PATH, "-y",
-            "-loop", "1", "-t", f"{dur:.3f}", "-i", media_path,
-            "-i", audio_path,
-            "-loop", "1", "-t", f"{dur:.3f}", "-i", overlay_png,
-            "-filter_complex", filter_complex,
-            "-map", "[outv]",
-            "-map", "1:a:0",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-            "-shortest",
-            clip_path,
-        ]
+        cur_label = nxt_label
+        next_in_idx += 1
+
+    for c_idx, (c_png, c_start, c_end) in enumerate(cue_pngs):
+        extra_inputs.extend(["-i", c_png])
+        nxt_label = f"v_c{c_idx}"
+        enable_expr = (
+            f"between(t,{c_start:.3f},{c_end:.3f})"
+            if c_idx == len(cue_pngs) - 1
+            else f"gte(t,{c_start:.3f})*lt(t,{c_end:.3f})"
+        )
+        filter_parts.append(
+            f"[{cur_label}][{next_in_idx}:v]overlay=0:1205:eof_action=repeat:enable='{enable_expr}'[{nxt_label}]"
+        )
+        cur_label = nxt_label
+        next_in_idx += 1
+
+    filter_parts.append(f"[{cur_label}]format=yuv420p[outv]")
+    filter_complex = ";".join(filter_parts)
+
+    cmd = [FFMPEG_PATH, "-y"]
+    if is_vid:
+        cmd.extend(["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", media_path])
+    else:
+        cmd.extend(["-i", media_path])
+    cmd.extend(["-i", audio_path])
+    cmd.extend(extra_inputs)
+    cmd.extend([
+        "-filter_complex", filter_complex,
+        "-map", "[outv]",
+        "-map", "1:a:0",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+        "-shortest",
+        clip_path,
+    ])
 
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="ignore")
     if res.returncode != 0:
-        raise RuntimeError(f"FFmpeg error on short scene {order_idx}: {res.stderr[-400:]}")
+        raise RuntimeError(f"FFmpeg error on short scene {order_idx}: {res.stderr[-450:]}")
     return clip_path
 
 
@@ -1036,11 +962,23 @@ def build_shorts_for_project(proj_name="lfp_vs_ncm", lang="vi"):
                 for item in enriched_items:
                     f_txt.write(f"{item['index']:02d} ({scene_word} {item['scene_num']:02d}). {item['text']}\n")
 
+            hook_banner_png = os.path.join(temp_dir, "hook_banner_01.png")
+            render_hook_banner_png(
+                hook_banner_png,
+                cfg["title_line1"],
+                cfg.get("title_line2", ""),
+                badge_text=cfg.get("badge", ""),
+                lang=lang,
+                accent_hex=cfg["accent_color"],
+            )
+
             tasks = []
             total_sc = len(enriched_items)
             with ThreadPoolExecutor(max_workers=4) as executor:
                 for i, item in enumerate(enriched_items):
                     order_idx = i + 1
+                    mw, mh = probe_media_dimensions(selected_media_paths[i])
+                    is_portrait = (mh > mw)
                     scene_overlay_png = os.path.join(temp_dir, f"overlay_{order_idx:02d}.png")
                     if lang == "en":
                         box_rect = create_short_overlay_en(
@@ -1048,9 +986,10 @@ def build_shorts_for_project(proj_name="lfp_vs_ncm", lang="vi"):
                             cfg["badge"],
                             cfg["title_line1"],
                             cfg["title_line2"],
-                            subtitle_text=item["text"],
+                            subtitle_text="",
                             step_label=f"Scene {order_idx}/{total_sc}",
                             accent_hex=cfg["accent_color"],
+                            is_portrait=is_portrait,
                         )
                     else:
                         box_rect = create_short_overlay(
@@ -1058,9 +997,10 @@ def build_shorts_for_project(proj_name="lfp_vs_ncm", lang="vi"):
                             cfg["badge"],
                             cfg["title_line1"],
                             cfg["title_line2"],
-                            subtitle_text=item["text"],
+                            subtitle_text="",
                             step_label=f"Cảnh {order_idx}/{total_sc}",
                             accent_hex=cfg["accent_color"],
+                            is_portrait=is_portrait,
                         )
                     fut = executor.submit(
                         _render_short_scene,
@@ -1073,6 +1013,10 @@ def build_shorts_for_project(proj_name="lfp_vs_ncm", lang="vi"):
                         DEFAULT_FPS,
                         temp_dir,
                         bg_hex,
+                        item["text"],
+                        lang,
+                        cfg["accent_color"],
+                        hook_banner_png if order_idx == 1 else None,
                     )
                     tasks.append((order_idx, item["scene_num"], item["duration"], fut))
 
@@ -1128,14 +1072,22 @@ def render_short_thumbnail(cfg, hero_video_path, output_jpg, temp_dir):
     accent_rgb = tuple(int(accent_hex[i:i+2], 16) for i in (0, 2, 4)) + (255,)
 
     raw_frame_jpg = os.path.join(temp_dir, "hero_frame.jpg")
+    if os.path.exists(raw_frame_jpg):
+        try:
+            os.remove(raw_frame_jpg)
+        except Exception:
+            pass
     ext = os.path.splitext(hero_video_path)[1].lower()
     if ext in {".jpg", ".jpeg", ".png", ".webp"}:
         Image.open(hero_video_path).convert("RGB").save(raw_frame_jpg, quality=96)
     else:
-        subprocess.run(
-            [FFMPEG_PATH, "-y", "-ss", "00:00:02.50", "-i", hero_video_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
-            capture_output=True,
-        )
+        for ss_t in ("00:00:02.50", "00:00:00.10"):
+            subprocess.run(
+                [FFMPEG_PATH, "-y", "-ss", ss_t, "-i", hero_video_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
+                capture_output=True,
+            )
+            if os.path.exists(raw_frame_jpg) and os.path.getsize(raw_frame_jpg) > 0:
+                break
 
     canvas = Image.new("RGBA", (W, H), bg_cream)
     draw = ImageDraw.Draw(canvas)
@@ -1293,10 +1245,18 @@ def render_short_thumbnail_en(cfg, hero_media_path, output_jpg, temp_dir):
     ext = os.path.splitext(hero_media_path)[1].lower()
     if ext in {".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv"}:
         raw_frame_jpg = os.path.join(temp_dir, "hero_frame_en.jpg")
-        subprocess.run(
-            [FFMPEG_PATH, "-y", "-ss", "00:00:02.50", "-i", hero_media_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
-            capture_output=True,
-        )
+        if os.path.exists(raw_frame_jpg):
+            try:
+                os.remove(raw_frame_jpg)
+            except Exception:
+                pass
+        for ss_t in ("00:00:02.50", "00:00:00.10"):
+            subprocess.run(
+                [FFMPEG_PATH, "-y", "-ss", ss_t, "-i", hero_media_path, "-frames:v", "1", "-update", "1", raw_frame_jpg],
+                capture_output=True,
+            )
+            if os.path.exists(raw_frame_jpg) and os.path.getsize(raw_frame_jpg) > 0:
+                break
     else:
         raw_frame_jpg = hero_media_path
 

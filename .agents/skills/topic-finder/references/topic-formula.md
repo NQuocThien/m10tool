@@ -1,47 +1,23 @@
-# Topic Formula, Anti-Saturation Rotation & Output Template
+# Topic Formula V3 — Curiosity Gap, Niche Lock & Shorts-First Output
 
-## Channel Fit & Sub-Niche Rotation
-- **VI — Vắt Chanh Công Nghệ**: *Vắt sạch thông số, giữ lại cách dùng*. Everyday Vietnamese user pain points, practical savings, myth-busting.
-- **EN — Squeezing Tech**: *Extracting Value from Everyday Tech*. Universal physics/engineering truth.
-- **Sub-Niche Rotation Matrix (Chống Bão Hòa Shorts Feed)**:
-  Never run more than 2–3 consecutive projects on the exact same object (e.g., scooter batteries). Rotate across these 5 core pillars:
-  1. **Mobile & Charging**: GaN chargers, Silicon-Carbon phone batteries, PD/PPS protocols, cable resistance, MagSafe/Qi2 heat.
-  2. **Home Connectivity**: Wi-Fi 6/7 5GHz vs 2.4GHz wall attenuation, mesh backhaul, fiber modem bottlenecks.
-  3. **Smart Appliances & Power**: Inverter AC startup draw, induction vs infrared cooktops, fridge compressor duty cycles.
-  4. **EV & Mobility**: LFP/NCM/Solid-state batteries, regenerative braking, IP67 flood physics, tire rolling resistance.
-  5. **Computing & Audio**: SSD TBW/SLC cache cliff, ANC phase cancellation, OLED PWM dimming vs Mini-LED.
+## 1. Curiosity-Gap Title Rules (Chống Lộ Đáp Án Sớm)
+- **Under 55–65 chars** (excluding `#shorts`).
+- **NEVER spoil the conclusion in the title**:
+  - *Sai (Lộ đáp án)*: `"Củ sạc 65W giá 150K và 600K: Tốc độ sạc giống hệt nhau nhưng hại pin!"`
+  - *Đúng (Curiosity Gap)*: `"Cái Bẫy Ẩn Sau Củ Sạc 65W Giá 150K Vẫn Báo 'Sạc Siêu Nhanh'"`
 
-## 5-Angle Diversity Matrix
-Assign each of the 5 proposals a different primary angle:
-1. **Sai lầm tốn tiền**: Everyday habits silently degrading hardware.
-2. **Giải phẫu cơ chế**: Hidden component/algorithm doing the real work (great for 2D cutaway visuals).
-3. **Thông số vs Thực tế / So sánh**: Marketing number vs real-world physics, or Tech A vs Tech B.
-4. **Cực đoan & An toàn**: Water, heat, fire, surge, cold — what actually breaks and how to rescue.
-5. **Công nghệ mới / Chọn mua**: Next-gen material/standard vs current mainstream; clear buyer verdict.
-
-## Quality Checklist (Per Topic)
-- **Hook (Câu 01 / Tập 1)**: Concrete contrast numbers + standard units (`200 km`, `800°C`, `15 triệu`, `30%`). Ban `"Chắc hẳn bạn từng..."`.
-- **4 cụm Shorts (Mỗi cụm = 1 Hook 3s có số liệu)**: Every cluster MUST include a specific number or shocking physical mechanism in its summary (e.g., *"Cụm 3 (Hook 40kg vs 10kg): Đèo bao gạo 30kg vô hình làm hao 15% điện đề-pa"*), never a bland academic title like *"Cụm 3: Trọng lượng của ắc quy"*.
-- **Quy tắc bỏ túi**: Short, memorable, numeric rule (`30 - 20 - 80`, `nhân 65%`, `chờ 4 tiếng`).
-- **Slug**: Lowercase English `snake_case`, 2–4 words, reusable directly as `projects/<slug>/`.
-
-## Output Template
-
+## 2. Output Template
 ```markdown
-Đã có <N> project: [<slug_1>](file:///c:/Workspace2/Video/projects/<slug_1>), ...
-*(Lưu ý xoay vòng chủ đề nếu 3 project gần nhất trùng ngách)*
-
-5 chủ đề mới về <seed_topic> (chuẩn Hook sốc -> 4 cụm Shorts có Hook số liệu riêng -> Quy tắc bỏ túi):
-
-### 1. <Tiêu đề hấp dẫn> (`<project_slug>`)
-- **Hook Mở Màn**: <1 câu đối lập có con số cụ thể>
-- **4 cụm Shorts (kèm Hook 3s riêng cho từng tập)**:
-  1. **Tập 1 (<Con số/Nghịch lý>)**: <Cơ chế/nguyên nhân>
-  2. **Tập 2 (<Con số/Nghịch lý>)**: <Cơ chế/ẩn dụ>
-  3. **Tập 3 (<Con số/Nghịch lý>)**: <Cơ chế/ẩn dụ>
-  4. **Tập 4 (<Con số/Quy tắc>)**: <Mẹo thực chiến/cấp cứu>
-- **Quy tắc bỏ túi**: <1 câu công thức/quy tắc hành động cụ thể>
+### 1. <Tiêu đề Curiosity Gap <55 ký tự> (`<project_slug>`)
+- **Nhánh**: <Sạc GaN / Smartphone / Xe điện / Wi-Fi / Phần cứng>
+- **Hook Cảnh 01 (0–3s)**: "<Câu 01 dài 12–15 từ có số liệu đối lập>"
+- **Khung Short 6 câu (`~28s`, Seamless Loop)**:
+  1. Cảnh 01 `[VIDEO 9:16]`: <Hiện tượng thật / Nỗi đau mất tiền>
+  2. Cảnh 02 `[IMG 9:16]`: <Linh kiện/nguyên nhân bị giấu>
+  3. Cảnh 03 `[VIDEO 9:16]`: <Đối lập cơ chế vật lý A vs B>
+  4. Cảnh 04 `[IMG 9:16]`: <Hậu quả định lượng bằng con số>
+  5. Cảnh 05 `[IMG 9:16]`: <Mẹo kiểm tra thực chiến 3 giây>
+  6. Cảnh 06 `[VIDEO 9:16]`: <Gài Sub 1.5s + Cầu nối ngược về Cảnh 01>
+- **Mở rộng Video dài 16:9 (khi Short >2.000 views)**: <Góc thực nghiệm 24–28 câu>
 ```
-
-Repeat for items `2` through `5`, then close with:
-`Chọn số 1–5 (hoặc đổi ngách chủ đề) để sang /video-maker lên kịch bản 30 câu.`
+Close with: `Chọn số 1–5 để sang /shorts-maker lên kịch bản Short 9:16 dò đường (24–34s).`

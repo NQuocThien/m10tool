@@ -1,55 +1,31 @@
 ---
 name: topic-finder
-description: This skill should be used when finding new tech video topics for Vắt Chanh Công Nghệ & Squeezing Tech with deduped ideas, hooks, 4 Shorts clusters, and pocket rules.
-version: 1.1.0
+description: This skill should be used when finding new tech video topics for Vắt Chanh Công Nghệ & Squeezing Tech using the V3 Shorts-First Probe strategy, locked to the Power/Mobile/EV hardware audience.
+version: 3.0.0
 ---
 
-# Topic Finder — Vắt Chanh Công Nghệ & Squeezing Tech
+# Topic Finder V3 — Shorts-First Probe (Trục Điện • Di Động • Xe Điện)
 
-Fast ideation workflow for proposing 5 high-retention tech video topics aligned with `video-maker` (v2.3+) and `shorts-maker` (v1.5+).
+Propose **5 high-retention Shorts-First Probe topics (`24–34s`)** with Curiosity-Gap titles (`<55 chars`), 6-beat vertical blueprints, and Winner Long-Form expansion angles.
 
-## Input Pattern
+## Core Positioning Lock (30-Day Authority Sprint)
 
-Accept a short seed domain or subject after the skill command:
-- `/topic-finder sạc nhanh điện thoại`
-- `/topic-finder wifi xuyên tường`
-- `/topic-finder điều hòa inverter`
-- `/topic-finder pin xe máy điện`
-
-If no seed topic is provided, inspect recent projects in `projects/` and immediately propose **4 diverse everyday-tech categories** (to prevent sub-niche fatigue) or ask for the target domain in one short line.
+- **Locked Audience Pillar**: **Điện – Di động – Xe điện** (*Male/Tech-Utility Seed Audience*).
+- **5 Allowed Sub-Pillars (Rotate across proposals)**:
+  1. **Charging & Power**: Củ sạc GaN, chuẩn PD/PPS, cáp E-Marker, sạc dự phòng dung lượng ảo, MagSafe/Qi2 nóng máy.
+  2. **Smartphone & Display**: Pin Silicon-Carbon vs Li-ion, màn OLED PWM nháy mắt, tản nhiệt buồng hơi, bẫy sạc 80% vs 100%.
+  3. **EV & 2-Wheeler Mobility**: Pin LFP vs NCM, sụt áp leo dốc, phanh tái sinh, động cơ Hub vs CVT, áp suất lốp ngốn pin.
+  4. **Wi-Fi & Home Networking**: Wi-Fi 6/7 băng tần 5GHz vs 2.4GHz xuyên tường, đặt sai Router, Mesh backhaul vs Repeater.
+  5. **Storage, Audio & Computing**: SSD đầy 85% tụt tốc độ SLC Cache, chống ồn ANC ngược pha, ổ cắm chống sét MOV.
+- **STRICT BAN**: Do NOT jump to kitchen/plumbing appliances (water purifiers, stoves) unless user passes `--allow-appliance`. Never propose 2 consecutive projects on the exact same device.
 
 ## Workflow
 
-### 1. Deduplicate & Check Sub-Niche Saturation
-List `projects/` sorted by modification time:
-```powershell
-Get-ChildItem -Path projects -Directory | Sort-Object LastWriteTime -Descending | Select-Object Name, LastWriteTime
-```
-Ignore utility folders (`demo_test`, `sample_template`).
-- **Anti-Saturation Rule**: If the 3 most recent projects belong to the exact same sub-niche (e.g., 3+ consecutive electric motorbike battery videos), explicitly flag **Sub-Niche Fatigue Warning** in 1 line and recommend rotating to an adjacent high-demand consumer tech domain (Smartphones/GaN Chargers, Wi-Fi/Networking, Smart Home/Inverter Appliances, Audio/ANC, PC/SSD Hardware) so the Shorts Feed audience doesn't suffer visual banner blindness.
-
-### 2. Ground Facts & Numbers
-Run 1–2 targeted `search_web` queries when the seed topic involves 2025–2026 specs, safety thresholds, or pricing. Use verified numbers and real physical mechanisms; never invent specs.
-
-### 3. Propose 5 Distinct Topics with 4 Shorts Cluster Hooks
-Load `references/topic-formula.md` and generate **5 topics** covering distinct angles:
-1. Myth-busting / costly mistakes
-2. Internal anatomy / hidden mechanism (cutaway-friendly)
-3. Head-to-head comparison or spec-vs-reality gap
-4. Extreme condition / safety / failure mode
-5. Emerging tech / buying decision
-
-Each topic must fit **Vắt Chanh Công Nghệ (VI)** (Vietnamese consumer tech pain points; EN channel `Squeezing Tech` is paused) and include:
-- Title + snake_case project slug (`project_slug`)
-- **Hook (Tập 1 Opener)**: Shocking number or direct paradox (no cliché openings)
-- **4 cụm Shorts (Mỗi cụm kèm Con số sốc / Hook 3s riêng)**: 4 standalone sub-points where **every cluster has its own concrete numeric/pain hook** ready to become an animated `[VIDEO]` Short opener
-- **Quy tắc bỏ túi**: 1-sentence actionable numeric rule/formula (Open Loop payoff)
-
-### 4. Selection Gate & Handoff
-End with a brief prompt asking user to pick `1–5` (or combine/adjust).
-- **Do NOT** generate full 30-line scripts or visual prompts during topic finding.
-- Once user selects a topic, activate `video-maker` Stage 1.
-
-## References
-- Angle diversity, anti-saturation rotation & output template: `references/topic-formula.md`
-- Downstream script rules: `../video-maker/references/script-writing-guide.md`
+1. **Audit Recent Projects**: Run `Get-ChildItem -Path projects -Directory | Sort-Object LastWriteTime -Descending | Select-Object Name, LastWriteTime` (ignore `demo_test`, `sample_template`). Flag collision if the 2 latest projects share the exact same device.
+2. **Ground Specs**: Run 1–2 `search_web` queries if 2025–2026 specs/wattage/prices need verification.
+3. **Propose 5 Standalone Shorts-First Topics**: Load `references/topic-formula.md`. Each topic MUST include:
+   - **Curiosity-Gap Title (`<55 chars`, NEVER spoil verdict upfront)** + `project_slug`
+   - **Hook Cảnh 01 (`0–3s`, cận cảnh vật thật + số liệu đối lập)**
+   - **Khung Short 6 Nhịp (`24–34s`, Seamless Loop + gài Sub `1.5s`)**
+   - **Hướng mở rộng Video dài 16:9 (chỉ dựng khi Short >2.000 views & APV >75%)**
+4. **Handoff**: Ask user to pick `1–5`, then activate `shorts-maker` (Standalone `9:16` mode).

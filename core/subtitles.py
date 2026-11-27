@@ -1,7 +1,7 @@
 import os
 import re
 import subprocess
-from .config import FFMPEG_PATH
+from .config import FFMPEG_PATH, HIGHLIGHT_UNITS, SHORT_WORDS_PER_CAPTION
 
 
 def get_audio_duration(audio_path):
@@ -67,6 +67,107 @@ def split_subtitle_chunks(text, max_words=9):
                     final_chunks.append(part)
 
     return final_chunks if final_chunks else [text]
+
+
+def _group_atomic_tokens(words):
+    """Glue [number + unit] pairs into atomic tokens so '3 triệu' or '65 W' never splits mid-phrase."""
+    atoms = []
+    i = 0
+    while i < len(words):
+        w = words[i]
+        clean_w = w.strip(".,!?:;\"'()[]{}—–-")
+        has_digit = any(ch.isdigit() for ch in clean_w)
+        if has_digit and (i + 1) < len(words):
+            next_clean = words[i + 1].strip(".,!?:;\"'()[]{}—–-").lower()
+            if next_clean in HIGHLIGHT_UNITS:
+                atoms.append(f"{w} {words[i + 1]}")
+                i += 2
+                continue
+        atoms.append(w)
+        i += 1
+    return atoms
+
+
+def split_short_caption_chunks(text, max_words=SHORT_WORDS_PER_CAPTION):
+    """
+    Splits a spoken sentence into punchy 3-5 word dynamic caption beats for 9:16 Shorts.
+    Preserves clause pauses and keeps [number + unit] pairs together.
+    """
+    text = text.strip()
+    if not text:
+        return []
+
+    raw_clauses = [c.strip() for c in re.split(r'(?<=[,;:\.\?\!—])\s+', text) if c.strip()]
+    if not raw_clauses:
+        raw_clauses = [text]
+
+    chunks = []
+    for clause in raw_clauses:
+        # Remove standalone em-dash tokens so captions look clean on mobile
+        clause_clean = re.sub(r'\s+—\s+', ' ', clause).strip(" —–")
+        if not clause_clean:
+            continue
+        atoms = _group_atomic_tokens(clause_clean.split())
+        total_w = sum(len(a.split()) for a in atoms)
+        if total_w <= max_words + 1:
+            chunks.append(" ".join(atoms))
+            continue
+
+        cur_atoms = []
+        cur_w = 0
+        for atom in atoms:
+            aw = len(atom.split())
+            if cur_atoms and (cur_w + aw) > max_words:
+                chunks.append(" ".join(cur_atoms))
+                cur_atoms = [atom]
+                cur_w = aw
+            else:
+                cur_atoms.append(atom)
+                cur_w += aw
+
+        if cur_atoms:
+            # Merge single-word trailing orphan into previous chunk of same clause
+            if cur_w == 1 and chunks:
+                chunks[-1] = f"{chunks[-1]} {' '.join(cur_atoms)}"
+            else:
+                chunks.append(" ".join(cur_atoms))
+
+    return chunks if chunks else [text]
+
+
+def compute_caption_cue_timings(text, duration, max_words=SHORT_WORDS_PER_CAPTION):
+    """
+    Maps dynamic 3-5 word caption chunks onto [0.0 .. duration] with natural speech & punctuation weights.
+    Returns: [{'start': float, 'end': float, 'text': str}, ...]
+    """
+    dur = max(0.2, float(duration))
+    chunks = split_short_caption_chunks(text, max_words=max_words)
+    if not chunks:
+        return [{"start": 0.0, "end": dur, "text": ""}]
+    if len(chunks) == 1:
+        return [{"start": 0.0, "end": dur, "text": chunks[0]}]
+
+    weights = []
+    for ch in chunks:
+        char_len = max(2, len(re.sub(r'\s+', '', ch)))
+        pause_bonus = 3.5 if ch[-1] in ",;:.?!—" else 0.0
+        weights.append(char_len + pause_bonus)
+
+    total_w = max(1.0, sum(weights))
+    cues = []
+    cum_w = 0.0
+    prev_end = 0.0
+    for idx, (ch, w) in enumerate(zip(chunks, weights)):
+        cum_w += w
+        end_t = dur if idx == len(chunks) - 1 else (dur * (cum_w / total_w))
+        cues.append({
+            "start": round(prev_end, 3),
+            "end": round(max(prev_end, end_t), 3),
+            "text": ch,
+        })
+        prev_end = cues[-1]["end"]
+    cues[-1]["end"] = round(dur, 3)
+    return cues
 
 
 def generate_subtitles(audio_items, srt_path):
