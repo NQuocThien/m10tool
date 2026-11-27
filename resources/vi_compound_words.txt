@@ -1,0 +1,153 @@
+# Từ ghép tiếng Việt KHÔNG được cắt đôi khi chia phụ đề (mỗi dòng 1 cụm, không phân biệt hoa/thường).
+# Thêm cụm mới khi thấy phụ đề bị ngắt sai, ví dụ: "tùy nhu / cầu".
+# Dòng bắt đầu bằng # là ghi chú.
+
+# Điện - pin - sạc
+pin lithium
+ắc quy
+bình ắc quy
+chì axit
+điện cực
+điện phân
+cực dương
+cực âm
+lớp phủ
+lầm tưởng
+pin sạc
+sạc nhanh
+sạc dự phòng
+củ sạc
+dây sạc
+cổng sạc
+trạm sạc
+bộ sạc
+dòng điện
+điện áp
+công suất
+dung lượng
+mật độ năng lượng
+năng lượng
+nhiệt độ
+quá nhiệt
+tản nhiệt
+cháy nổ
+chai pin
+phồng pin
+tuổi thọ
+chu kỳ
+ổ điện
+ổ cắm
+điện thoại
+máy tính
+máy tính bảng
+tai nghe
+màn hình
+bộ nhớ
+vi xử lý
+
+# Xe điện
+xe điện
+xe máy điện
+xe máy
+xe đạp điện
+ô tô điện
+ô tô
+động cơ
+quãng đường
+tốc độ
+trọng lượng
+trọng tâm
+mũ bảo hiểm
+cốp xe
+hộp số
+
+# Mạng - Wi-Fi
+mạng
+bộ phát
+bộ định tuyến
+sóng wifi
+tín hiệu
+tốc độ mạng
+nhà mạng
+
+# Gia dụng
+máy lọc nước
+lõi lọc
+nước sạch
+bếp từ
+bếp hồng ngoại
+nồi cơm điện
+máy giặt
+tủ lạnh
+điều hòa
+
+# Từ ghép thường gặp
+nhu cầu
+bảo hiểm
+bảo hành
+an toàn
+nguy hiểm
+tiết kiệm
+chi phí
+giá thành
+giá rẻ
+chất lượng
+thông số
+kỹ thuật
+công nghệ
+thiết bị
+linh kiện
+nhà sản xuất
+người dùng
+khách hàng
+hàng ngày
+mỗi ngày
+đi lại
+thực tế
+thực chiến
+sự thật
+bí mật
+vấn đề
+nguyên nhân
+kết quả
+hiệu suất
+hiệu quả
+lựa chọn
+so sánh
+khác biệt
+giống hệt
+đầu tiên
+cuối cùng
+quan trọng
+đơn giản
+dễ dàng
+nhanh chóng
+lâu dài
+vĩnh viễn
+âm thầm
+đăng ký
+bình luận
+chia sẻ
+video
+vắt chanh
+công nghệ
+
+# Vật liệu - hóa học
+siêu dẫn
+siêu mỏng
+vật liệu
+dung dịch
+phản ứng
+ăn mòn
+chống gỉ
+bề mặt
+khô ráo
+bản chất
+hoạt động
+khung sắt
+tờ rơi
+đánh lừa
+lớn nhất
+ngang hàng
+cưa đôi
+đầu tiên

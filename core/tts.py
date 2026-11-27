@@ -10,13 +10,14 @@ import numpy as np
 import edge_tts
 from google import genai
 from google.genai import types
+from . import tts_cache
+from .vi_text import normalize_for_tts
 from .config import (
     DEFAULT_VOICE,
     FFMPEG_PATH,
     GEMINI_TTS_MODEL,
     GEMINI_TTS_FALLBACK_MODELS,
     GEMINI_STYLE_VI,
-    GEMINI_STYLE_EN,
     SCENE_TAIL_PAD_SEC,
 )
 
@@ -146,14 +147,9 @@ def _split_wav_by_lines(wav_bytes: bytes, texts: list[str]) -> list[bytes]:
     return out_wavs
 
 
-def _resolve_gemini_style(audio_dir, style):
-    """Selects default narration style based on language directory if style is omitted."""
-    if style:
-        return style
-    dir_name = os.path.basename(os.path.normpath(audio_dir)).lower()
-    if dir_name.endswith("_en"):
-        return GEMINI_STYLE_EN
-    return GEMINI_STYLE_VI
+def _resolve_gemini_style(style):
+    """Uses the channel's Vietnamese narration style unless a custom style is given."""
+    return style or GEMINI_STYLE_VI
 
 
 def _create_fast_genai_client():
@@ -317,26 +313,57 @@ def generate_audio(script_path, audio_dir, voice=DEFAULT_VOICE, force=False, sty
 
     print(f"-> Generating voiceover ({len(lines)} lines) using voice: {voice}", flush=True)
 
+    is_gemini = voice.startswith("gemini:")
+    narration_style = _resolve_gemini_style(style) if is_gemini else ""
+    manifest = tts_cache.load_manifest(audio_dir)
+    # What the narrator speaks (terms/units expanded); subtitles keep the original script text.
+    spoken = {idx: normalize_for_tts(text) for idx, text in enumerate(lines, 1)}
+    keys = {idx: tts_cache.line_cache_key(spoken[idx], voice, narration_style) for idx in spoken}
+    legacy_count = 0
+
     for idx, text in enumerate(lines, 1):
         out_mp3 = os.path.join(audio_dir, f"{idx:02d}_voice.mp3")
-        needs_gen = force or not os.path.exists(out_mp3) or os.path.getsize(out_mp3) == 0
+        needs_gen, reason = tts_cache.plan_line(idx, keys[idx], out_mp3, manifest, force)
         if needs_gen:
-            pending_items.append((idx, text, out_mp3))
+            pending_items.append((idx, spoken[idx], out_mp3))
+            if reason == "changed":
+                print(f"  [{idx:02d}/{len(lines)}] Nội dung/giọng đã đổi -> tạo lại", flush=True)
         else:
+            legacy_count += reason == "legacy"
             print(f"  [{idx:02d}/{len(lines)}] Cached {os.path.basename(out_mp3)}", flush=True)
 
-    if pending_items:
-        if voice.startswith("gemini:"):
-            voice_name = voice.split(":", 1)[1]
-            narration_style = _resolve_gemini_style(audio_dir, style)
-            client = _create_fast_genai_client()
-            exhausted_models = set()
-            _synthesize_batch_gemini(
-                client, pending_items, len(lines), voice_name, narration_style, exhausted_models, batch_size=5
-            )
-        else:
-            asyncio.run(_batch_generate_edge(pending_items, len(lines), voice))
-        print(f"  [OK] Generated {len(pending_items)} audio files successfully.", flush=True)
+    if legacy_count:
+        print(
+            f"  [WARN] Thư mục audio cũ chưa có {tts_cache.MANIFEST_NAME}: tạm dùng lại {legacy_count} file có sẵn. "
+            "Nếu kịch bản đã sửa trước đây, chạy lại với --force để đồng bộ.",
+            flush=True,
+        )
+
+    # Remove stale audio first so a file on disk always means "synthesized from the current text".
+    for _, _, out_mp3 in pending_items:
+        if os.path.exists(out_mp3):
+            os.remove(out_mp3)
+
+    try:
+        if pending_items:
+            if is_gemini:
+                voice_name = voice.split(":", 1)[1]
+                client = _create_fast_genai_client()
+                exhausted_models = set()
+                _synthesize_batch_gemini(
+                    client, pending_items, len(lines), voice_name, narration_style, exhausted_models, batch_size=5
+                )
+            else:
+                asyncio.run(_batch_generate_edge(pending_items, len(lines), voice))
+            print(f"  [OK] Generated {len(pending_items)} audio files successfully.", flush=True)
+    finally:
+        # Record every line whose audio now exists, even if synthesis stopped midway.
+        done = [
+            (idx, keys[idx], text)
+            for idx, text in enumerate(lines, 1)
+            if tts_cache.has_audio(os.path.join(audio_dir, f"{idx:02d}_voice.mp3"))
+        ]
+        tts_cache.save_manifest(audio_dir, tts_cache.record_lines(manifest, voice, done))
 
     full_audio = bytearray()
     for idx, text in enumerate(lines, 1):
@@ -356,7 +383,7 @@ def generate_audio(script_path, audio_dir, voice=DEFAULT_VOICE, force=False, sty
     return results
 
 
-def synthesize_preview(text, out_mp3, voice=DEFAULT_VOICE, lang="vi", force=False):
+def synthesize_preview(text, out_mp3, voice=DEFAULT_VOICE, force=False):
     """Synthesizes a single preview line to out_mp3 using Gemini TTS or Edge TTS."""
     os.makedirs(os.path.dirname(out_mp3), exist_ok=True)
     if not force and os.path.exists(out_mp3) and os.path.getsize(out_mp3) > 0:
@@ -364,7 +391,7 @@ def synthesize_preview(text, out_mp3, voice=DEFAULT_VOICE, lang="vi", force=Fals
 
     if voice.startswith("gemini:"):
         voice_name = voice.split(":", 1)[1]
-        style = GEMINI_STYLE_EN if lang == "en" else GEMINI_STYLE_VI
+        style = GEMINI_STYLE_VI
         client = _create_fast_genai_client()
         _synthesize_line_gemini(client, 1, 1, text, voice_name, style, out_mp3)
     else:

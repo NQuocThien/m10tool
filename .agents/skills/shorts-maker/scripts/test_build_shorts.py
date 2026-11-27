@@ -17,11 +17,11 @@ from core.subtitles import compute_caption_cue_timings, split_short_caption_chun
 
 class TestBuildShortsV3(unittest.TestCase):
     def test_resolve_claimed_vs_real_range_paths(self):
-        for lang in ("vi", "en"):
-            paths = bs.resolve_project_paths("claimed_vs_real_range", lang)
-            self.assertTrue(os.path.isfile(paths["script_path"]))
-            self.assertTrue(os.path.isdir(paths["media_dir"]))
-            self.assertFalse(paths["is_short_first"])
+        paths = bs.resolve_project_paths("claimed_vs_real_range")
+        self.assertTrue(os.path.isfile(paths["script_path"]))
+        self.assertTrue(paths["script_path"].endswith("_vi.txt"))
+        self.assertTrue(os.path.isdir(paths["media_dir"]))
+        self.assertFalse(paths["is_short_first"])
 
     def test_split_short_caption_chunks_and_cue_timings(self):
         line = "Máy lọc RO 10 lõi đắt hơn máy 5 lõi tới 3 triệu đồng — nhưng độ sạch giống hệt 99.9%!"
@@ -63,7 +63,7 @@ class TestBuildShortsV3(unittest.TestCase):
         try:
             loaded = bs.load_and_validate_configs(tmp_path, total_scenes=30)
             self.assertEqual(len(loaded), 1)
-            badge_out = bs.format_overlay_badge(loaded[0], 1, 4, "vi")
+            badge_out = bs.format_overlay_badge(loaded[0], 1, 4)
             self.assertNotIn("TẬP", badge_out)
             self.assertIn("SẠC NHANH 65W GIÁ RẺ", badge_out)
             self.assertIn("BẪY PHÒNG LAB", badge_out)

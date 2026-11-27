@@ -1,4 +1,4 @@
-# Shorts Config Schema V3 (`shorts_config_<lang>.json`)
+# Shorts Config Schema V3 (`shorts_config_vi.json`)
 
 Array of **1 standalone Short object** (Shorts-First Mode 1) or **1–2 standalone Short objects** (Repurpose Mode 2).
 

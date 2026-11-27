@@ -1,7 +1,8 @@
 import os
 import re
 import subprocess
-from .config import FFMPEG_PATH, HIGHLIGHT_UNITS, SHORT_WORDS_PER_CAPTION
+from .config import FFMPEG_PATH, SHORT_WORDS_PER_CAPTION
+from .vi_text import group_caption_atoms, is_phrase_start
 
 
 def get_audio_duration(audio_path):
@@ -52,46 +53,40 @@ def split_subtitle_chunks(text, max_words=9):
         else:
             merged_clauses.append(cl)
 
-    # 2. Further split any clause still exceeding max_words into balanced halves
+    # 2. Further split any clause still exceeding max_words into balanced parts,
+    #    never breaking compound words or [number + unit] atoms
     final_chunks = []
     for cl in merged_clauses:
         cl_words = cl.split()
         if len(cl_words) <= max_words:
             final_chunks.append(cl)
-        else:
-            num_parts = (len(cl_words) + max_words - 1) // max_words
-            step = (len(cl_words) + num_parts - 1) // num_parts
-            for i in range(0, len(cl_words), step):
-                part = " ".join(cl_words[i:i + step]).strip()
-                if part:
-                    final_chunks.append(part)
+            continue
+        num_parts = (len(cl_words) + max_words - 1) // max_words
+        target = (len(cl_words) + num_parts - 1) // num_parts
+        clause_chunks = []
+        cur, cur_w = [], 0
+        for atom in group_caption_atoms(cl_words):
+            aw = len(atom.split())
+            if cur and cur_w + aw > target:
+                clause_chunks.append(" ".join(cur))
+                cur, cur_w = [], 0
+            cur.append(atom)
+            cur_w += aw
+        if cur:
+            # A lone trailing word flashes for a split second: merge it into the previous line
+            if cur_w == 1 and clause_chunks:
+                clause_chunks[-1] = f"{clause_chunks[-1]} {cur[0]}"
+            else:
+                clause_chunks.append(" ".join(cur))
+        final_chunks.extend(clause_chunks)
 
     return final_chunks if final_chunks else [text]
-
-
-def _group_atomic_tokens(words):
-    """Glue [number + unit] pairs into atomic tokens so '3 triệu' or '65 W' never splits mid-phrase."""
-    atoms = []
-    i = 0
-    while i < len(words):
-        w = words[i]
-        clean_w = w.strip(".,!?:;\"'()[]{}—–-")
-        has_digit = any(ch.isdigit() for ch in clean_w)
-        if has_digit and (i + 1) < len(words):
-            next_clean = words[i + 1].strip(".,!?:;\"'()[]{}—–-").lower()
-            if next_clean in HIGHLIGHT_UNITS:
-                atoms.append(f"{w} {words[i + 1]}")
-                i += 2
-                continue
-        atoms.append(w)
-        i += 1
-    return atoms
 
 
 def split_short_caption_chunks(text, max_words=SHORT_WORDS_PER_CAPTION):
     """
     Splits a spoken sentence into punchy 3-5 word dynamic caption beats for 9:16 Shorts.
-    Preserves clause pauses and keeps [number + unit] pairs together.
+    Preserves clause pauses and keeps [number + unit] pairs and compound words together.
     """
     text = text.strip()
     if not text:
@@ -107,7 +102,7 @@ def split_short_caption_chunks(text, max_words=SHORT_WORDS_PER_CAPTION):
         clause_clean = re.sub(r'\s+—\s+', ' ', clause).strip(" —–")
         if not clause_clean:
             continue
-        atoms = _group_atomic_tokens(clause_clean.split())
+        atoms = group_caption_atoms(clause_clean.split())
         total_w = sum(len(a.split()) for a in atoms)
         if total_w <= max_words + 1:
             chunks.append(" ".join(atoms))
@@ -117,7 +112,10 @@ def split_short_caption_chunks(text, max_words=SHORT_WORDS_PER_CAPTION):
         cur_w = 0
         for atom in atoms:
             aw = len(atom.split())
-            if cur_atoms and (cur_w + aw) > max_words:
+            # Hard cut at max_words; soft cut earlier before a function word ("là", "của", "để"...)
+            # so lines end on natural phrase boundaries instead of mid-compound ("siêu / dẫn").
+            soft_cut = cur_w >= max(2, max_words - 1) and is_phrase_start(atom)
+            if cur_atoms and ((cur_w + aw) > max_words or soft_cut):
                 chunks.append(" ".join(cur_atoms))
                 cur_atoms = [atom]
                 cur_w = aw

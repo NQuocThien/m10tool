@@ -14,6 +14,7 @@ if sys.stdout.encoding != 'utf-8':
 from core.config import PROJECTS_DIR, DEFAULT_VOICE
 from core.sorter import get_sorted_images
 from core.tts import generate_audio
+from core.tts_cache import read_cached_voice
 from core.subtitles import generate_subtitles
 from core.renderer import render_project, render_long_thumbnail
 
@@ -27,25 +28,15 @@ def resolve_project_dir(name_or_path):
         return os.path.abspath(name_or_path)
     return proj_in_root
 
-def get_script_path(proj_dir, lang="vi"):
-    """
-    Returns path to script file based on language:
-    lang='vi' -> script_vi.txt (fallback script.txt)
-    lang='en' -> script_en.txt (fallback script.txt)
-    """
-    if lang == "vi":
-        cand = os.path.join(proj_dir, "script_vi.txt")
-        if os.path.exists(cand):
-            return cand
-    elif lang == "en":
-        cand = os.path.join(proj_dir, "script_en.txt")
-        if os.path.exists(cand):
-            return cand
-
-    default_cand = os.path.join(proj_dir, "script.txt")
-    if os.path.exists(default_cand):
-        return default_cand
-    return os.path.join(proj_dir, f"script_{lang}.txt")
+def get_script_path(proj_dir):
+    """Returns script_vi.txt (fallback: legacy script.txt)."""
+    cand = os.path.join(proj_dir, "script_vi.txt")
+    if os.path.exists(cand):
+        return cand
+    legacy = os.path.join(proj_dir, "script.txt")
+    if os.path.exists(legacy):
+        return legacy
+    return cand
 
 def cmd_list_projects():
     os.makedirs(PROJECTS_DIR, exist_ok=True)
@@ -66,7 +57,7 @@ def cmd_list_projects():
         valid_exts = ('.jpg', '.jpeg', '.png', '.webp', '.mp4', '.mov', '.webm')
         m_dir = os.path.join(p_dir, "video_short_vi")
         if not (os.path.exists(m_dir) and any(f.lower().endswith(valid_exts) for f in os.listdir(m_dir))):
-            m_dir = get_media_dir(p_dir, lang="vi")
+            m_dir = get_media_dir(p_dir)
         img_count = len([f for f in os.listdir(m_dir) if f.lower().endswith(valid_exts)]) if os.path.exists(m_dir) else 0
         
         scripts = []
@@ -74,8 +65,6 @@ def cmd_list_projects():
             scripts.append("SHORT-VI")
         if os.path.exists(os.path.join(p_dir, "script_vi.txt")):
             scripts.append("VI")
-        if os.path.exists(os.path.join(p_dir, "script_en.txt")):
-            scripts.append("EN")
         if os.path.exists(os.path.join(p_dir, "script.txt")) and not scripts:
             scripts.append("Mặc định")
         script_info = "/".join(scripts) if scripts else "Chưa có"
@@ -92,8 +81,8 @@ def cmd_list_projects():
         
         print(f"{p:<22} | {img_count:<12} | {script_info:<16} | {mp4_status}")
     print("-" * 75)
-    print("-> Dựng Short 9:16 : python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_folder> --lang vi")
-    print("-> Dựng Video 16:9 : python make_video.py <ten_folder> [--lang vi|en]\n")
+    print("-> Dựng Short 9:16 : python .agents/skills/shorts-maker/scripts/build_shorts.py <ten_folder>")
+    print("-> Dựng Video 16:9 : python make_video.py <ten_folder>\n")
 
 def cmd_new_project(name, short_first=False):
     proj_dir = os.path.join(PROJECTS_DIR, name)
@@ -170,52 +159,39 @@ def cmd_new_project(name, short_first=False):
         print(f"2. Prompts 9:16            : {prompts_vid} | {prompts_img}")
         print(f"3. Thư mục Media 9:16      : {video_short_vi}")
         print(f"4. Cấu hình Short V3       : {shorts_cfg_path}")
-        print(f"5. Dựng ngay 1 lệnh        : python .agents/skills/shorts-maker/scripts/build_shorts.py {name} --lang vi\n")
+        print(f"5. Dựng ngay 1 lệnh        : python .agents/skills/shorts-maker/scripts/build_shorts.py {name}\n")
         return
 
     imgs_dir = os.path.join(proj_dir, "imgs")
     imgs_vi_dir = os.path.join(proj_dir, "imgs_vi")
-    imgs_en_dir = os.path.join(proj_dir, "imgs_en")
     video_vi_dir = os.path.join(proj_dir, "video_vi")
-    video_en_dir = os.path.join(proj_dir, "video_en")
     script_vi = os.path.join(proj_dir, "script_vi.txt")
-    script_en = os.path.join(proj_dir, "script_en.txt")
     prompts_vi_vid = os.path.join(proj_dir, "prompts_vi_video.txt")
     prompts_vi_img = os.path.join(proj_dir, "prompts_vi_img.txt")
-    prompts_en_vid = os.path.join(proj_dir, "prompts_en_video.txt")
-    prompts_en_img = os.path.join(proj_dir, "prompts_en_img.txt")
         
-    for d in [imgs_dir, imgs_vi_dir, imgs_en_dir, video_vi_dir, video_en_dir]:
+    for d in [imgs_dir, imgs_vi_dir, video_vi_dir]:
         os.makedirs(d, exist_ok=True)
     
     with open(script_vi, "w", encoding="utf-8") as f:
         f.write("01. Cau thoai tieng Viet canh mot o day.\n02. Cau thoai tieng Viet canh hai o day.\n")
-    with open(script_en, "w", encoding="utf-8") as f:
-        f.write("01. English narration for scene one.\n02. English narration for scene two.\n")
     with open(prompts_vi_vid, "w", encoding="utf-8") as f:
         f.write("# BỘ PROMPT [VIDEO] KÊNH TIẾNG VIỆT (NỀN VÀNG KEM #FAF7F2) - 6-8 CẢNH HOOK/CLIMAX\n")
     with open(prompts_vi_img, "w", encoding="utf-8") as f:
         f.write("# BỘ PROMPT [IMG] KÊNH TIẾNG VIỆT (NỀN VÀNG KEM #FAF7F2) - 18-20 CẢNH TĨNH\n")
-    with open(prompts_en_vid, "w", encoding="utf-8") as f:
-        f.write("# BỘ PROMPT [VIDEO] KÊNH TIẾNG ANH (NỀN XANH ĐEN #0B132B) - 6-8 CẢNH HOOK/CLIMAX\n")
-    with open(prompts_en_img, "w", encoding="utf-8") as f:
-        f.write("# BỘ PROMPT [IMG] KÊNH TIẾNG ANH (NỀN XANH ĐEN #0B132B) - 18-20 CẢNH TĨNH\n")
         
     print(f"\n[OK] Da khoi tao du an moi tai: {proj_dir}")
-    print(f"1. Kich ban   : {script_vi} (VI) | {script_en} (EN)")
-    print(f"2. Prompts VI : {prompts_vi_vid} | {prompts_vi_img}")
-    print(f"3. Prompts EN : {prompts_en_vid} | {prompts_en_img}")
-    print(f"4. Media VI   : {imgs_vi_dir} hoac {video_vi_dir}")
-    print(f"5. Media EN   : {imgs_en_dir} hoac {video_en_dir}")
-    print(f"6. Render     : python make_video.py {name} --lang vi (hoac --lang en)\n")
+    print(f"1. Kich ban : {script_vi}")
+    print(f"2. Prompts  : {prompts_vi_vid} | {prompts_vi_img}")
+    print(f"3. Media    : {imgs_vi_dir} hoac {video_vi_dir}")
+    print(f"4. Render   : python make_video.py {name}\n")
 
-def get_media_dir(proj_dir, lang="vi", custom_media_dir=None):
+def get_media_dir(proj_dir, custom_media_dir=None):
     if custom_media_dir and os.path.exists(custom_media_dir):
         return custom_media_dir
     candidates = [
-        os.path.join(proj_dir, f"video_{lang}"),
-        os.path.join(proj_dir, f"imgs_{lang}-clean"),
-        os.path.join(proj_dir, f"imgs_{lang}"),
+        os.path.join(proj_dir, "video_vi"),
+        os.path.join(proj_dir, "imgs_vi-clean"),
+        os.path.join(proj_dir, "imgs_vi"),
         os.path.join(proj_dir, "video"),
         os.path.join(proj_dir, "videos"),
         os.path.join(proj_dir, "imgs-clean"),
@@ -226,25 +202,29 @@ def get_media_dir(proj_dir, lang="vi", custom_media_dir=None):
             return c
     return os.path.join(proj_dir, "imgs")
 
-def _extract_thumb_lines_from_youtube_md(proj_dir, proj_name, lang="vi"):
-    """Extract 2 short overlay lines from youtube_<lang>.md if documented, else fallback cleanly."""
-    yt_md = os.path.join(proj_dir, f"youtube_{lang}.md")
+def _extract_thumb_lines_from_youtube_md(proj_dir, proj_name):
+    """Extract 2 short overlay lines from the Thumbnail section of youtube_vi.md, avoiding header slugs/.mp4."""
+    yt_md = os.path.join(proj_dir, "youtube_vi.md")
     if os.path.isfile(yt_md):
         with open(yt_md, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
-        bolds = re.findall(r":\s*\*\*([^*]{4,36})\*\*", content)
-        if len(bolds) >= 2:
-            return bolds[-2].strip(), bolds[-1].strip()
-        backticks = re.findall(r":\s*`([^`]{4,36})`", content)
-        if len(backticks) >= 2:
-            return backticks[0].strip(), backticks[1].strip()
+        thumb_sec = re.split(r"(?i)##\s*5\.|thiết kế\s+(?:thumbnail|ảnh bìa)", content)[-1]
+        candidates = (
+            re.findall(r":\s*\*\*([^*]{4,36})\*\*", thumb_sec)
+            + re.findall(r":\s*`([^`]{4,36})`", thumb_sec)
+        )
+        clean_cands = [
+            c.strip() for c in candidates
+            if not c.lower().endswith(".mp4") and not c.startswith("#") and "_" not in c
+        ]
+        if len(clean_cands) >= 2:
+            return clean_cands[0], clean_cands[1]
     clean_title = proj_name.replace("_", " ").upper()
-    return clean_title[:24], ("SỰ THẬT BÊN TRONG!" if lang == "vi" else "HIDDEN PHYSICS TRUTH!")
+    return clean_title[:24], "SỰ THẬT BÊN TRONG!"
 
 
 def build_video_for_project(
     proj_path,
-    lang="vi",
     voice=None,
     force=False,
     media_dir=None,
@@ -260,23 +240,19 @@ def build_video_for_project(
         sys.exit(1)
         
     proj_name = os.path.basename(os.path.normpath(proj_dir))
-    media_dir = get_media_dir(proj_dir, lang=lang, custom_media_dir=media_dir)
-    script_path = get_script_path(proj_dir, lang=lang)
+    media_dir = get_media_dir(proj_dir, custom_media_dir=media_dir)
+    script_path = get_script_path(proj_dir)
 
-    # Determine default voice based on language
+    audio_dir = os.path.join(proj_dir, "audio_vi")
+
+    # Default voice: the one already cached for this project, else the channel default
     if voice is None:
-        if lang == "vi":
-            voice = "gemini:voice_5mxlq1k9luls"
-        else:
-            voice = "gemini:Charon"
-
-    # Distinguish audio, sub, and video outputs per language
-    audio_dir = os.path.join(proj_dir, f"audio_{lang}")
-    srt_path = os.path.join(proj_dir, f"subtitles_{lang}.srt")
-    output_mp4 = os.path.join(proj_dir, f"{proj_name}_{lang}.mp4")
+        voice = read_cached_voice(audio_dir) or DEFAULT_VOICE
+    srt_path = os.path.join(proj_dir, "subtitles_vi.srt")
+    output_mp4 = os.path.join(proj_dir, f"{proj_name}_vi.mp4")
     
     print(f"\n========================================================")
-    print(f"BAT DAU PIPELINE DUNG VIDEO [{lang.upper()}]: {proj_name}")
+    print(f"BAT DAU PIPELINE DUNG VIDEO: {proj_name}")
     print(f"Thu muc: {proj_dir}")
     print(f"Nguon media: {os.path.basename(media_dir)}")
     print(f"File thoai: {os.path.basename(script_path)}")
@@ -300,31 +276,29 @@ def build_video_for_project(
         sys.exit(1)
         
     # 3. Subtitles sync
-    print(f"\n[Buoc 3/4] Dong bo thoi luong & sinh file phu de SRT ({lang.upper()})...")
+    print(f"\n[Buoc 3/4] Dong bo thoi luong & sinh file phu de SRT...")
     enriched_items = generate_subtitles(audio_items, srt_path)
     
     # 4. Render Video (default use_intro=False so Hook hits at 00:00)
-    print(f"\n[Buoc 4/4] Dung video Full HD ({lang.upper()})...")
+    print(f"\n[Buoc 4/4] Dung video Full HD...")
     final_video = render_project(
         media_paths,
         enriched_items,
         srt_path,
         output_mp4,
         use_intro=use_intro,
-        lang=lang,
         motion_25d=motion_25d,
     )
 
     # Auto-generate high-contrast 16:9 thumbnail so long-form never uploads without a custom cover
-    thumb_out = os.path.join(proj_dir, f"thumbnail_{lang}.jpg")
+    thumb_out = os.path.join(proj_dir, "thumbnail_vi.jpg")
     if force or thumb_top or not os.path.exists(thumb_out):
-        auto_top, auto_bot = _extract_thumb_lines_from_youtube_md(proj_dir, proj_name, lang=lang)
+        auto_top, auto_bot = _extract_thumb_lines_from_youtube_md(proj_dir, proj_name)
         render_long_thumbnail(
             media_paths[0],
             thumb_out,
             headline_top=thumb_top or auto_top,
             headline_bottom=thumb_bottom or auto_bot,
-            lang=lang,
         )
         print(f"[THUMBNAIL 16:9 OK] {thumb_out}")
     
@@ -336,7 +310,7 @@ def build_video_for_project(
 def main():
     parser = argparse.ArgumentParser(description="Multi-Video Generator Engine (V3 Retention-First)")
     parser.add_argument("project", nargs="?", help="Ten folder du an trong projects/ hoac duong dan thu muc")
-    parser.add_argument("--lang", choices=["vi", "en"], default="vi", help="Ngon ngu video: 'vi' (Tieng Viet) hoac 'en' (Tieng Anh)")
+    parser.add_argument("--lang", choices=["vi"], default="vi", help="Chi con kenh tieng Viet (giu de tuong thich lenh cu)")
     parser.add_argument("--new", metavar="NAME", help="Tao nhanh 1 folder du an moi")
     parser.add_argument("--new-short", metavar="NAME", help="Tao nhanh du an SHORTS-FIRST 9:16 doc lap (6-7 cau, 24-34s)")
     parser.add_argument("--short-first", action="store_true", help="Ket hop voi --new de tao du an SHORTS-FIRST 9:16")
@@ -367,7 +341,6 @@ def main():
     if args.project:
         build_video_for_project(
             proj_path=args.project,
-            lang=args.lang,
             voice=args.voice,
             force=args.force,
             media_dir=args.media_dir,
@@ -381,7 +354,7 @@ def main():
     cmd_list_projects()
     print("Cach dung (Flow V3 Shorts-First):")
     print("  python make_video.py --new-short <ten_moi>     # Buoc 1: Tao du an Short 9:16 do duong (24-34s)")
-    print("  python make_video.py <ten_folder> --lang vi    # Buoc 2: Render Video dai 16:9 (khi Short no view)\n")
+    print("  python make_video.py <ten_folder>              # Buoc 2: Render Video dai 16:9 (khi Short no view)\n")
 
 if __name__ == "__main__":
     main()

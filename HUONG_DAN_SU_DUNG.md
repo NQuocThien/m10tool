@@ -9,6 +9,7 @@ Tài liệu quy trình đầy đủ xem tại **[WORKFLOW.md](WORKFLOW.md)**.
 
 ## 2. Thao Tác Trên Giao Diện Studio (`run_studio.bat`)
 1. Bấm **`+ Tạo Dự Án Mới`** -> Giữ tích chọn **`Chuẩn Shorts-First 9:16 dò đường`** -> Nhập tên dự án.
-2. Duyệt kịch bản 6–7 câu với AI (`/topic-finder` -> `/shorts-maker`), đẩy prompt `--ar 9:16` qua tab **Bot Google Flow**, tải file về `video_short_vi/` (xóa sao AI ở tab **Xóa Star/Logo Gemini** nếu cần) rồi bấm **`🔀 Sort Resource`**.
+2. Duyệt kịch bản 6–7 câu với AI (`/topic-finder` -> `/shorts-maker`), đẩy prompt `--ar 9:16` qua tab **Bot Google Flow**, tải file về `video_short_vi/` (giữ nguyên dấu nhận diện AI) rồi bấm **`🔀 Sort Resource`**.
 3. Bấm **`📱 DỰNG SHORTS 9:16`** -> Tool tự tạo giọng đọc AI (`gemini:voice_5mxlq1k9luls`), dựng video `9:16` tràn viền + phụ đề động `3–5 từ/nhịp` + ảnh bìa + file chữ đăng bài trong `shorts_vi/`.
 4. Khi Short nổ view -> Dùng `/video-maker` tạo bộ `16:9` trong `video_vi/` -> Bấm **`🎬 VIDEO DÀI 16:9`** để xuất video không vướng Intro 3s kèm `thumbnail_vi.jpg` tương phản cao.
+5. Khi đăng video: bật nhãn **nội dung bị thay đổi hoặc tổng hợp** (altered or synthetic content) trong YouTube Studio vì hình ảnh/giọng đọc do AI tạo *(đối chiếu chính sách hiện hành của YouTube)*.

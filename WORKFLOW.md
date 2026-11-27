@@ -53,7 +53,8 @@ projects/<slug>/
    python auto_flow.py projects/<slug>/prompts_short_vi_video.txt 45 65
    python auto_flow.py projects/<slug>/prompts_short_vi_img.txt 15 25
    ```
-   - Xóa sao góc phải bằng Tab *Xóa Star/Logo Gemini* trên `run_studio.bat` nếu cần, đánh số `01_..06_` trong `video_short_vi/`.
+   - Giữ nguyên dấu nhận diện AI trên ảnh/video; đánh số `01_..06_` trong `video_short_vi/`.
+   - Khi đăng, bật nhãn **nội dung bị thay đổi hoặc tổng hợp** (altered or synthetic content) trong YouTube Studio *(đối chiếu chính sách hiện hành của YouTube)*.
 4. **Kiểm duyệt Retention & Render Short 9:16 chỉ với 1 lệnh**:
    ```bash
    python .agents/skills/shorts-maker/scripts/build_shorts.py <slug> --lang vi --dry-run

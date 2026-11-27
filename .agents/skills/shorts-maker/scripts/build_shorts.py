@@ -27,9 +27,13 @@ from core.renderer import get_bgm_path
 from core.sorter import get_sorted_images
 from core.subtitles import generate_subtitles
 from core.tts import generate_audio, load_script
+from core.tts_cache import read_cached_voice
 import make_shorts as ms
 import re
 from PIL import Image, ImageDraw
+
+# Single-channel (Vietnamese) build: folder suffix for script_short_vi.txt, video_vi/, shorts_vi/...
+LANG = "vi"
 
 REQUIRED_FIELDS = [
     "id",
@@ -49,20 +53,20 @@ REQUIRED_FIELDS = [
 ]
 
 
-def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_override=None):
+def resolve_project_paths(proj_name, media_dir_override=None, audio_dir_override=None):
     """
     Resolve script, media, audio, config, and output paths for both:
-    - V3 Shorts-First projects (script_short_<lang>.txt + video_short_<lang>/ + audio_short_<lang>/)
-    - Legacy / Long-form projects (script_<lang>.txt + video_<lang>/ + audio_<lang>/)
+    - V3 Shorts-First projects (script_short_vi.txt + video_short_vi/ + audio_short_vi/)
+    - Legacy / Long-form projects (script_vi.txt + video_vi/ + audio_vi/)
     """
     proj_dir = os.path.join(PROJECTS_DIR, proj_name)
     if not os.path.isdir(proj_dir):
         raise FileNotFoundError(f"Project not found: {proj_dir}")
 
-    short_script = os.path.join(proj_dir, f"script_short_{lang}.txt")
-    long_script = os.path.join(proj_dir, f"script_{lang}.txt")
+    short_script = os.path.join(proj_dir, f"script_short_{LANG}.txt")
+    long_script = os.path.join(proj_dir, f"script_{LANG}.txt")
     fallback_script = os.path.join(proj_dir, "script.txt")
-    config_path = os.path.join(proj_dir, f"shorts_config_{lang}.json")
+    config_path = os.path.join(proj_dir, f"shorts_config_{LANG}.json")
 
     # Determine max scene referenced in shorts_config so dual-stage projects pick the matching script
     max_cfg_sc = 0
@@ -91,7 +95,7 @@ def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_ov
     elif os.path.isfile(fallback_script):
         script_path = fallback_script
     else:
-        raise FileNotFoundError(f"Script not found in {proj_dir} (checked script_short_{lang}.txt and script_{lang}.txt)")
+        raise FileNotFoundError(f"Script not found in {proj_dir} (checked script_short_{LANG}.txt and script_{LANG}.txt)")
 
     def _has_valid_media(d):
         if not os.path.isdir(d):
@@ -103,9 +107,9 @@ def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_ov
         media_dir = media_dir_override if os.path.isabs(media_dir_override) else os.path.join(proj_dir, media_dir_override)
     else:
         candidates = (
-            [f"video_short_{lang}", f"imgs_short_{lang}", f"video_{lang}", f"imgs_{lang}", "imgs-clean", "imgs"]
+            [f"video_short_{LANG}", f"imgs_short_{LANG}", f"video_{LANG}", f"imgs_{LANG}", "imgs-clean", "imgs"]
             if is_short_first
-            else [f"video_{lang}", f"imgs_{lang}", "imgs-clean", "imgs", f"video_short_{lang}"]
+            else [f"video_{LANG}", f"imgs_{LANG}", "imgs-clean", "imgs", f"video_short_{LANG}"]
         )
         media_dir = next(
             (os.path.join(proj_dir, c) for c in candidates if _has_valid_media(os.path.join(proj_dir, c))),
@@ -123,17 +127,17 @@ def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_ov
         audio_dir = audio_dir_override if os.path.isabs(audio_dir_override) else os.path.join(proj_dir, audio_dir_override)
     else:
         if is_short_first:
-            audio_dir = os.path.join(proj_dir, f"audio_short_{lang}")
+            audio_dir = os.path.join(proj_dir, f"audio_short_{LANG}")
         else:
-            audio_candidates = [f"audio_{lang}", "audio"]
+            audio_candidates = [f"audio_{LANG}", "audio"]
             audio_dir = next(
                 (os.path.join(proj_dir, c) for c in audio_candidates if os.path.isdir(os.path.join(proj_dir, c))),
-                os.path.join(proj_dir, f"audio_{lang}"),
+                os.path.join(proj_dir, f"audio_{LANG}"),
             )
 
-    config_path = os.path.join(proj_dir, f"shorts_config_{lang}.json")
-    shorts_out_dir = os.path.join(proj_dir, f"shorts_{lang}")
-    has_long_video = os.path.isfile(os.path.join(proj_dir, f"{proj_name}_{lang}.mp4"))
+    config_path = os.path.join(proj_dir, f"shorts_config_{LANG}.json")
+    shorts_out_dir = os.path.join(proj_dir, f"shorts_{LANG}")
+    has_long_video = os.path.isfile(os.path.join(proj_dir, f"{proj_name}_{LANG}.mp4"))
     return {
         "proj_dir": proj_dir,
         "script_path": script_path,
@@ -146,16 +150,12 @@ def resolve_project_paths(proj_name, lang, media_dir_override=None, audio_dir_ov
     }
 
 
-def load_and_validate_configs(config_path, total_scenes, proj_name=None, lang="vi"):
-    """Load shorts_config_<lang>.json (with legacy lfp_vs_ncm fallback) and validate required fields."""
+def load_and_validate_configs(config_path, total_scenes, proj_name=None):
+    """Load shorts_config_vi.json and validate required fields."""
     if not os.path.isfile(config_path):
-        if proj_name == "lfp_vs_ncm":
-            configs = ms.SHORTS_CONFIG_EN if lang == "en" else ms.SHORTS_CONFIG
-        else:
-            raise FileNotFoundError(f"Shorts config not found: {config_path}")
-    else:
-        with open(config_path, "r", encoding="utf-8") as f:
-            configs = json.load(f)
+        raise FileNotFoundError(f"Shorts config not found: {config_path}")
+    with open(config_path, "r", encoding="utf-8") as f:
+        configs = json.load(f)
 
     if not isinstance(configs, list) or not configs:
         raise ValueError("Shorts config must be a non-empty JSON array.")
@@ -287,19 +287,17 @@ def audit_shorts_retention_risks(configs, all_lines, all_media):
     return warnings
 
 
-def format_overlay_badge(cfg, ep_idx, total_eps, lang="vi"):
+def format_overlay_badge(cfg, ep_idx, total_eps):
     """Format clean standalone topic badge (automatically strips legacy 'TẬP X/N' numbering)."""
     raw_badge = re.sub(r"(?i)\b(tập|tap|episode|ep|part)\s*\d+\s*(/\s*\d+)?\s*[•\-:|]*\s*", "", cfg.get("badge", "")).strip(" •-:|")
     main_topic = cfg.get("main_topic", "").strip()
     if main_topic and raw_badge and main_topic.upper() not in raw_badge.upper():
         return f"{main_topic.upper()} • {raw_badge}"
-    return (main_topic.upper() or raw_badge or ("SQUEEZING TECH" if lang == "en" else "VẮT CHANH CÔNG NGHỆ"))
+    return (main_topic.upper() or raw_badge or "VẮT CHANH CÔNG NGHỆ")
 
 
-def format_step_label(ep_idx, total_eps, scene_order_idx, total_scenes_in_ep, lang="vi"):
+def format_step_label(ep_idx, total_eps, scene_order_idx, total_scenes_in_ep):
     """Format subtitle card header right label with Episode + Scene progress."""
-    if lang == "en":
-        return f"Part {ep_idx}/{total_eps} • Scene {scene_order_idx}/{total_scenes_in_ep}"
     return f"Tập {ep_idx}/{total_eps} • Cảnh {scene_order_idx}/{total_scenes_in_ep}"
 
 
@@ -327,7 +325,7 @@ def _prepare_punchy_short_audio(src_mp3, dst_mp3, speed=1.18, sfx_path=None):
             "-i", src_mp3,
             "-i", sfx_path,
             "-filter_complex",
-            f"[0:a]{voice_af}[v];[1:a]volume=0.35[sfx];[v][sfx]amix=inputs=2:duration=first:dropout_transition=0[aout]",
+            f"[0:a]{voice_af}[v];[1:a]volume=0.35[sfx];[v][sfx]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]",
             "-map", "[aout]",
             "-c:a", "libmp3lame", "-b:a", "192k", "-ar", "48000", "-ac", "2",
             dst_mp3,
@@ -346,17 +344,16 @@ def _prepare_punchy_short_audio(src_mp3, dst_mp3, speed=1.18, sfx_path=None):
     return dst_mp3
 
 
-def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
+def render_short_outro_cta_clip(cfg, overlay_badge, temp_dir, fps):
     """Render a ~2-2.5s Outro Hook CTA card directing viewers to the full video in pinned comment."""
     W, H = 1080, 1920
-    is_en = (lang == "en")
-    bg_rgba = (11, 19, 43, 255) if is_en else (250, 247, 242, 255)
-    card_rgba = (19, 31, 66, 255) if is_en else (255, 253, 249, 255)
-    text_main = (248, 250, 252, 255) if is_en else (28, 25, 23, 255)
-    border_rgba = (0, 229, 255, 255) if is_en else (28, 25, 23, 255)
-    accent_primary = (118, 255, 3, 255) if is_en else (211, 84, 0, 255)
-    accent_yellow = (255, 179, 0, 255) if is_en else (244, 196, 48, 255)
-    accent_green = (0, 229, 255, 255) if is_en else (124, 179, 66, 255)
+    bg_rgba = (250, 247, 242, 255)
+    card_rgba = (255, 253, 249, 255)
+    text_main = (28, 25, 23, 255)
+    border_rgba = (28, 25, 23, 255)
+    accent_primary = (211, 84, 0, 255)
+    accent_yellow = (244, 196, 48, 255)
+    accent_green = (124, 179, 66, 255)
 
     canvas = Image.new("RGBA", (W, H), bg_rgba)
     draw = ImageDraw.Draw(canvas)
@@ -366,12 +363,12 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     draw.ellipse((W - 320, H - 360, W + 180, H + 140), fill=(accent_green[0], accent_green[1], accent_green[2], 50))
 
     # Top brand pill
-    brand_text = "SQUEEZING TECH" if is_en else "VẮT CHANH CÔNG NGHỆ"
+    brand_text = "VẮT CHANH CÔNG NGHỆ"
     pill_w, pill_h = 560, 84
     pill_x, pill_y = (W - pill_w) // 2, 240
     draw.rounded_rectangle((pill_x, pill_y, pill_x + pill_w, pill_y + pill_h), radius=42, fill=card_rgba, outline=border_rgba, width=4)
     logo_path = os.path.join(RESOURCES_DIR, "logo_vi.jpg")
-    if not is_en and os.path.exists(logo_path):
+    if os.path.exists(logo_path):
         try:
             logo = Image.open(logo_path).convert("RGBA").resize((60, 60), Image.LANCZOS)
             mask = Image.new("L", (60, 60), 0)
@@ -380,7 +377,7 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
         except Exception:
             pass
     font_brand = ms._load_font(30, bold=True)
-    draw.text((pill_x + pill_w // 2 + (24 if not is_en else 0), pill_y + pill_h // 2), brand_text, font=font_brand, fill=text_main, anchor="mm")
+    draw.text((pill_x + pill_w // 2 + 24, pill_y + pill_h // 2), brand_text, font=font_brand, fill=text_main, anchor="mm")
 
     # Main topic pill
     font_badge = ms._load_font(26, bold=True)
@@ -389,7 +386,7 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     bw = min(940, (bb[2] - bb[0]) + 64)
     bx, by = (W - bw) // 2, 365
     draw.rounded_rectangle((bx, by, bx + bw, by + 62), radius=31, fill=accent_primary, outline=border_rgba, width=3)
-    draw.text((W // 2, by + 31), main_topic, font=font_badge, fill=(255, 255, 255, 255) if not is_en else (11, 19, 43, 255), anchor="mm")
+    draw.text((W // 2, by + 31), main_topic, font=font_badge, fill=(255, 255, 255, 255), anchor="mm")
 
     # Center CTA Card
     cx1, cy1, cx2, cy2 = 75, 560, W - 75, 1340
@@ -399,33 +396,33 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     # Top yellow header bar inside card
     draw.rounded_rectangle((cx1 + 36, cy1 + 44, cx2 - 36, cy1 + 148), radius=24, fill=accent_yellow, outline=border_rgba, width=4)
     font_sub = ms._load_font(40, bold=True)
-    hdr_txt = "WANT THE FULL BREAKDOWN?" if is_en else "MUỐN XEM TRỌN BỘ PHÂN TÍCH?"
+    hdr_txt = "MUỐN XEM TRỌN BỘ PHÂN TÍCH?"
     draw.text((W // 2, cy1 + 96), hdr_txt, font=font_sub, fill=(28, 25, 23, 255), anchor="mm")
 
     # Giant CTA headline
     font_big = ms._load_font(64, bold=True)
-    line1 = "WATCH FULL VIDEO" if is_en else "XEM FULL VIDEO GỐC"
-    line2 = "TAP RELATED LINK BELOW!" if is_en else "GÓC DƯỚI BÊN TRÁI!"
+    line1 = "XEM FULL VIDEO GỐC"
+    line2 = "GÓC DƯỚI BÊN TRÁI!"
     draw.text((W // 2, cy1 + 295), line1, font=font_big, fill=accent_primary, anchor="mm")
     draw.text((W // 2, cy1 + 395), line2, font=font_big, fill=accent_green, anchor="mm")
 
     # Related video arrow pill button
     draw.rounded_rectangle((cx1 + 85, cy1 + 520, cx2 - 85, cy1 + 630), radius=55, fill=accent_primary, outline=border_rgba, width=5)
     font_btn = ms._load_font(36, bold=True)
-    btn_txt = "▶ TAP RELATED VIDEO BELOW" if is_en else "▶ BẤM VIDEO LIÊN QUAN BÊN DƯỚI"
-    draw.text((W // 2, cy1 + 575), btn_txt, font=font_btn, fill=(255, 255, 255, 255) if not is_en else (11, 19, 43, 255), anchor="mm")
+    btn_txt = "▶ BẤM VIDEO LIÊN QUAN BÊN DƯỚI"
+    draw.text((W // 2, cy1 + 575), btn_txt, font=font_btn, fill=(255, 255, 255, 255), anchor="mm")
 
     # Slogan footer
     font_slogan = ms._load_font(30, bold=True)
-    slogan = "Extracting Value from Everyday Tech" if is_en else "Vắt sạch thông số, giữ lại cách dùng!"
+    slogan = "Vắt sạch thông số, giữ lại cách dùng!"
     draw.text((W // 2, 1460), slogan, font=font_slogan, fill=text_main, anchor="mm")
 
     cta_png = os.path.join(temp_dir, "outro_cta.png")
     canvas.convert("RGB").save(cta_png, quality=96)
 
-    cta_audio = os.path.join(RESOURCES_DIR, f"shorts_cta_{lang}.mp3")
+    cta_audio = os.path.join(RESOURCES_DIR, "shorts_cta_vi.mp3")
     if os.path.isfile(cta_audio) and os.path.getsize(cta_audio) > 0:
-        punchy_cta = os.path.join(temp_dir, f"punchy_cta_{lang}.mp3")
+        punchy_cta = os.path.join(temp_dir, "punchy_cta_vi.mp3")
         _prepare_punchy_short_audio(cta_audio, punchy_cta, speed=1.22, sfx_path=None)
         cta_use_audio = punchy_cta if os.path.isfile(punchy_cta) else cta_audio
         cta_dur = max(1.5, min(2.2, _probe_audio_duration(cta_use_audio)))
@@ -474,10 +471,10 @@ def render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, fps):
     return outro_mp4, cta_dur
 
 
-def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=False, voice=None, force_tts=False):
+def build_shorts(proj_name, paths, configs, skip_outro=True, force_outro=False, voice=None, force_tts=False):
     """
     V3 Shorts Builder:
-    - Auto-synthesizes missing TTS audio directly from script_short_<lang>.txt / script_<lang>.txt
+    - Auto-synthesizes missing TTS audio directly from script_short_vi.txt / script_vi.txt
     - Auto-detects 9:16 Full-Bleed vs 16:9 Large Showcase per scene
     - Renders 3.2s Hook Banner on Scene 1 + 3-5 word dynamic pop-in captions
     - Defaults to Seamless Loop (skip_outro=True) to maximize APV > 85%
@@ -488,22 +485,20 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
     for entry in os.listdir(shorts_out_dir):
         if entry.startswith("_temp_"):
             shutil.rmtree(os.path.join(shorts_out_dir, entry), ignore_errors=True)
-    bg_hex = "#0B132B" if lang == "en" else "#FAF7F2"
+    bg_hex = "#FAF7F2"
 
     all_lines = load_script(paths["script_path"])
     all_media = get_sorted_images(paths["media_dir"])
 
-    # Auto-generate TTS if any referenced scene audio is missing (enables 1-command Shorts-First workflow!)
-    needed_scenes = sorted({sc for cfg in configs for sc in cfg["scenes"]})
-    missing_audio = [
-        sc for sc in needed_scenes
-        if not os.path.isfile(os.path.join(paths["audio_dir"], f"{sc:02d}_voice.mp3"))
-        or os.path.getsize(os.path.join(paths["audio_dir"], f"{sc:02d}_voice.mp3")) == 0
-    ]
-    if force_tts or missing_audio:
-        eff_voice = voice or ("gemini:Charon" if lang == "en" else DEFAULT_VOICE)
-        print(f"-> Auto-generating TTS audio in '{os.path.basename(paths['audio_dir'])}' using {eff_voice}...")
-        generate_audio(paths["script_path"], paths["audio_dir"], voice=eff_voice, force=force_tts)
+    # Always sync TTS through the content-hash cache: only missing or edited lines hit the API.
+    # Without an explicit --voice, keep the voice already recorded for this audio folder.
+    eff_voice = (
+        voice
+        or read_cached_voice(paths["audio_dir"])
+        or DEFAULT_VOICE
+    )
+    print(f"-> Syncing TTS audio in '{os.path.basename(paths['audio_dir'])}' using {eff_voice}...")
+    generate_audio(paths["script_path"], paths["audio_dir"], voice=eff_voice, force=force_tts)
 
     generated = []
     total_eps = len(configs)
@@ -511,9 +506,9 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
     for ep_idx, cfg in enumerate(configs, 1):
         short_id = cfg["id"]
         scene_nums = cfg["scenes"]
-        overlay_badge = format_overlay_badge(cfg, ep_idx, total_eps, lang)
+        overlay_badge = format_overlay_badge(cfg, ep_idx, total_eps)
         has_related = bool(cfg.get("has_related_video", paths.get("has_long_video", False)))
-        print(f"\n=== BUILDING SHORT V3 [{lang.upper()}]: {short_id} ({overlay_badge}) | scenes={scene_nums} ===")
+        print(f"\n=== BUILDING SHORT V3: {short_id} ({overlay_badge}) | scenes={scene_nums} ===")
 
         temp_dir = os.path.join(shorts_out_dir, f"_temp_{short_id}")
         os.makedirs(temp_dir, exist_ok=True)
@@ -541,11 +536,10 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
             enriched = generate_subtitles(selected_audio, srt_out)
 
             txt_out = os.path.join(shorts_out_dir, f"{short_id}_script.txt")
-            scene_word = "Scene" if lang == "en" else "Cảnh"
             with open(txt_out, "w", encoding="utf-8") as f_txt:
                 f_txt.write(f"# {overlay_badge} - {cfg['title_line1']}: {cfg['title_line2']}\n")
                 for item in enriched:
-                    f_txt.write(f"{item['index']:02d} ({scene_word} {item['scene_num']:02d}). {item['text']}\n")
+                    f_txt.write(f"{item['index']:02d} (Cảnh {item['scene_num']:02d}). {item['text']}\n")
 
             # Render Scene 01 3.2s Hook Banner once per episode
             hook_banner_png = os.path.join(temp_dir, "hook_banner_01.png")
@@ -554,11 +548,9 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
                 cfg["title_line1"],
                 cfg.get("title_line2", ""),
                 badge_text=overlay_badge,
-                lang=lang,
                 accent_hex=cfg["accent_color"],
             )
 
-            overlay_fn = ms.create_short_overlay_en if lang == "en" else ms.create_short_overlay
             total_sc = len(enriched)
             tasks = []
             with ThreadPoolExecutor(max_workers=4) as executor:
@@ -567,13 +559,13 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
                     mw, mh = ms.probe_media_dimensions(selected_media[i])
                     is_portrait = (mh > mw)
                     overlay_png = os.path.join(temp_dir, f"overlay_{order_idx:02d}.png")
-                    box_rect = overlay_fn(
+                    box_rect = ms.create_short_overlay(
                         overlay_png,
                         overlay_badge,
                         cfg["title_line1"],
                         cfg["title_line2"],
                         subtitle_text="",  # Dynamic 3-5 word strips handle captions in V3
-                        step_label=format_step_label(ep_idx, total_eps, order_idx, total_sc, lang),
+                        step_label=format_step_label(ep_idx, total_eps, order_idx, total_sc),
                         accent_hex=cfg["accent_color"],
                         is_portrait=is_portrait,
                         has_related_video=has_related,
@@ -590,7 +582,6 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
                         temp_dir,
                         bg_hex,
                         item["text"],
-                        lang,
                         cfg["accent_color"],
                         hook_banner_png if order_idx == 1 else None,
                         SHORT_HOOK_BANNER_SEC,
@@ -604,7 +595,7 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
             if not use_outro:
                 outro_dur = 0.0
             else:
-                outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, lang, temp_dir, DEFAULT_FPS)
+                outro_mp4, outro_dur = render_short_outro_cta_clip(cfg, overlay_badge, temp_dir, DEFAULT_FPS)
                 clip_files.append(outro_mp4)
 
             concat_txt = os.path.join(temp_dir, "concat.txt")
@@ -625,14 +616,14 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
                 bgm_path = shorts_bgm
                 bgm_vol = 0.13
             else:
-                bgm_path = get_bgm_path(lang=lang)
+                bgm_path = get_bgm_path()
                 bgm_vol = DEFAULT_BGM_VOLUME
 
             if bgm_path and os.path.isfile(bgm_path):
                 fade_start = max(0.0, total_dur - 1.0)
                 af_mix = (
                     f"[1:a]volume={bgm_vol},afade=t=out:st={fade_start:.2f}:d=1.0[bgm];"
-                    f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                    f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]"
                 )
                 cmd_bgm = [
                     FFMPEG_PATH, "-y",
@@ -660,19 +651,18 @@ def build_shorts(proj_name, lang, paths, configs, skip_outro=True, force_outro=F
     return generated
 
 
-def generate_metadata_and_thumbnails(proj_name, lang, paths, configs):
+def generate_metadata_and_thumbnails(proj_name, paths, configs):
     """Render 9:16 thumbnails and export *_dang_bai.txt + TONG_HOP_DANG_SHORTS*.md."""
     shorts_out_dir = paths["shorts_out_dir"]
     os.makedirs(shorts_out_dir, exist_ok=True)
     all_media = get_sorted_images(paths["media_dir"])
-    summary_name = "TONG_HOP_DANG_SHORTS_EN.md" if lang == "en" else "TONG_HOP_DANG_SHORTS.md"
-    summary_md_path = os.path.join(shorts_out_dir, summary_name)
-    thumb_fn = ms.render_short_thumbnail_en if lang == "en" else ms.render_short_thumbnail
+    summary_md_path = os.path.join(shorts_out_dir, "TONG_HOP_DANG_SHORTS.md")
+    thumb_fn = ms.render_short_thumbnail
 
     md_lines = [
-        f"# BỘ TIÊU ĐỀ, MÔ TẢ & THUMBNAIL ĐĂNG YOUTUBE SHORTS [{lang.upper()}] ({proj_name})",
+        f"# BỘ TIÊU ĐỀ, MÔ TẢ & THUMBNAIL ĐĂNG YOUTUBE SHORTS ({proj_name})",
         "",
-        f"Tất cả file video `.mp4`, ảnh thu nhỏ `*_thumb.jpg` và nội dung đăng bài nằm tại `projects/{proj_name}/shorts_{lang}/`.",
+        f"Tất cả file video `.mp4`, ảnh thu nhỏ `*_thumb.jpg` và nội dung đăng bài nằm tại `projects/{proj_name}/shorts_{LANG}/`.",
         "",
     ]
 
@@ -702,6 +692,10 @@ def generate_metadata_and_thumbnails(proj_name, lang, paths, configs):
                 f.write("4. MÔ TẢ ẢNH THU NHỎ & PROMPT AI:\n")
                 f.write(f"   - Bố cục: {cfg['thumb_desc']}\n")
                 f.write(f"   - Prompt AI (9:16): {cfg['thumb_prompt']}\n")
+                f.write(
+                    "\n5. KHI ĐĂNG (YouTube Studio):\n"
+                    "   [ ] Bật nhãn 'Nội dung bị thay đổi hoặc tổng hợp' (hình ảnh/giọng đọc do AI tạo)\n"
+                )
 
             md_lines.extend([
                 "---",
@@ -742,9 +736,9 @@ def main():
         except Exception:
             pass
 
-    parser = argparse.ArgumentParser(description="Build 9:16 YouTube Shorts for any project from shorts_config_<lang>.json")
+    parser = argparse.ArgumentParser(description="Build 9:16 YouTube Shorts for any project from shorts_config_vi.json")
     parser.add_argument("project", help="Project folder name inside projects/")
-    parser.add_argument("--lang", choices=["vi", "en"], default="vi")
+    parser.add_argument("--lang", choices=["vi"], default="vi", help="Chi con kenh tieng Viet (giu de tuong thich lenh cu)")
     parser.add_argument("--media-dir", default=None, help="Optional override for media directory")
     parser.add_argument("--audio-dir", default=None, help="Optional override for audio directory")
     parser.add_argument("--meta-only", action="store_true", help="Only render thumbnails and metadata")
@@ -755,15 +749,15 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Validate paths and config without rendering")
     args = parser.parse_args()
 
-    paths = resolve_project_paths(args.project, args.lang, args.media_dir, args.audio_dir)
+    paths = resolve_project_paths(args.project, args.media_dir, args.audio_dir)
     all_lines = load_script(paths["script_path"])
     all_media = get_sorted_images(paths["media_dir"])
     if len(all_lines) != len(all_media):
         raise ValueError(f"Script lines ({len(all_lines)}) != media count ({len(all_media)})")
 
-    configs = load_and_validate_configs(paths["config_path"], len(all_lines), proj_name=args.project, lang=args.lang)
+    configs = load_and_validate_configs(paths["config_path"], len(all_lines), proj_name=args.project)
     mode_tag = "SHORTS-FIRST 9:16" if paths.get("is_short_first") else "16:9 -> 9:16 SHOWCASE"
-    print(f"[VALIDATED] {args.project} ({args.lang} | {mode_tag}): {len(all_lines)} scenes, {len(configs)} short(s)")
+    print(f"[VALIDATED] {args.project} ({mode_tag}): {len(all_lines)} scenes, {len(configs)} short(s)")
 
     retention_warnings = audit_shorts_retention_risks(configs, all_lines, all_media)
     for w in retention_warnings:
@@ -782,7 +776,6 @@ def main():
     if not args.meta_only:
         build_shorts(
             args.project,
-            args.lang,
             paths,
             configs,
             skip_outro=skip_outro_flag,
@@ -790,7 +783,7 @@ def main():
             voice=args.voice,
             force_tts=args.force_tts,
         )
-    generate_metadata_and_thumbnails(args.project, args.lang, paths, configs)
+    generate_metadata_and_thumbnails(args.project, paths, configs)
 
 
 if __name__ == "__main__":

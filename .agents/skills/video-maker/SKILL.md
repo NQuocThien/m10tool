@@ -43,7 +43,7 @@ Expand proven Shorts topics (or user-selected flagship topics in the **Điện �
 2. Save `script_vi.txt`, `prompts_vi_video.txt` (`6–8 [VIDEO] --ar 16:9`), and `prompts_vi_img.txt` (`16–20 [IMG] --ar 16:9`).
 
 ### Stage 3: Render 16:9 Video + Auto-Thumbnail + Link Winning Short
-1. Place media in `video_vi/` (`01_..NN_`) and clean any Gemini corner star via Studio Watermark tab if needed.
+1. Place media in `video_vi/` (`01_..NN_`) (keep AI provenance marks intact; enable YouTube's altered/synthetic content label when uploading).
 2. Render 0s-Intro video + high-contrast thumbnail:
    ```bash
    python make_video.py <project> --lang vi --thumb-top "<3-4 CHỮ ĐẦU>" --thumb-bottom "<3-4 CHỮ NHẤN>"
@@ -53,4 +53,3 @@ Expand proven Shorts topics (or user-selected flagship topics in the **Điện �
 ## References
 - Script pacing, mid-roll sub trigger & packaging rules: `references/script-writing-guide.md`
 - VI Channel visual prompts (`--ar 16:9` & `--ar 9:16`): `references/channel-vi.md`
-- EN Channel visual prompts: `references/channel-en.md`

@@ -2,9 +2,7 @@ import os
 import imageio_ffmpeg
 
 # Project Information
-CHANNEL_NAME_EN = "Squeezing Tech"
 CHANNEL_NAME_VI = "Vắt Chanh Công Nghệ"
-SLOGAN_EN = "Extracting Value from Everyday Tech"
 SLOGAN_VI = "Vắt sạch thông số, giữ lại cách dùng."
 
 # Paths
@@ -14,11 +12,9 @@ RESOURCES_DIR = os.path.join(BASE_DIR, "resources")
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
 # Intro & BGM paths
-INTRO_EN_PATH = os.path.join(RESOURCES_DIR, "intro_en.mp4")
 INTRO_VI_PATH = os.path.join(RESOURCES_DIR, "intro_vi.mp4")
 GLOBAL_INTRO_PATH = os.path.join(BASE_DIR, "intro.mp4")
 BGM_VI_PATH = os.path.join(RESOURCES_DIR, "bgm_vi.mp3")
-BGM_EN_PATH = os.path.join(RESOURCES_DIR, "bgm_en.mp3")
 GLOBAL_BGM_PATH = os.path.join(RESOURCES_DIR, "bgm.mp3")
 DEFAULT_BGM_VOLUME = 0.08
 SCENE_TAIL_PAD_SEC = 0.18
@@ -38,8 +34,7 @@ HIGHLIGHT_UNITS = {
     "triệu", "tỷ", "ngàn", "nghìn", "trăm", "năm", "tháng", "tuần", "ngày",
     "tiếng", "giờ", "phút", "giây", "lần", "bộ", "cây", "ký", "mét", "vạch",
     "chu", "kỳ", "lõi", "lít", "gram", "kg", "km", "cm", "mm", "w", "kw", "v",
-    "million", "billion", "years", "months", "hours", "minutes", "seconds",
-    "cycles", "times", "miles", "kilometers", "percent",
+    "oát", "vôn", "ampe", "độ", "inch", "lượt", "vòng", "%",
 }
 
 HIGHLIGHT_KEYWORDS = {
@@ -64,10 +59,6 @@ GEMINI_STYLE_VI = (
     "Authoritative, crisp Northern Vietnamese male tech documentary narrator. "
     "Rich medium-low voice, deliberate punchy emphasis on key words, studio mic presence."
 )
-GEMINI_STYLE_EN = (
-    "Speak like an engaging, authoritative tech documentary narrator. "
-    "Crisp articulation, natural conversational rhythm, warm and confident."
-)
 
 DEFAULT_VOICE = "gemini:voice_5mxlq1k9luls"
 
@@ -82,17 +73,6 @@ VOICES_VI = [
     ("Edge TTS - Hoài My (Cũ)", "vi-VN-HoaiMyNeural"),
 ]
 
-VOICES_EN = [
-    ("Gemini 3.8 - Charon (Informative, Tech Narrator)", "gemini:Charon"),
-    ("Gemini 3.8 - Orus (Firm, Authoritative)", "gemini:Orus"),
-    ("Gemini 3.8 - Puck (Upbeat, Engaging)", "gemini:Puck"),
-    ("Gemini 3.8 - Sadaltager (Knowledgeable)", "gemini:Sadaltager"),
-    ("Gemini 3.8 - Kore (Firm, Clear)", "gemini:Kore"),
-    ("Gemini 3.8 - Aoede (Breezy, Natural)", "gemini:Aoede"),
-    ("Edge TTS - Christopher (Old)", "en-US-ChristopherNeural"),
-    ("Edge TTS - Jenny (Old)", "en-US-JennyNeural"),
-]
-
 # Subtitle Styling (Compact, bold, high-contrast bottom-aligned)
 DEFAULT_SUB_STYLE = (
     "FontName=Segoe UI,FontSize=16,"
@@ -103,4 +83,3 @@ DEFAULT_SUB_STYLE = (
 
 # Outro templates
 OUTRO_SCRIPT_VI = "Vắt sạch thông số, giữ lại cách dùng. Đăng ký kênh để không bỏ lỡ video tiếp theo!"
-OUTRO_SCRIPT_EN = "Extracting value from everyday tech. Subscribe for the next deep dive!"

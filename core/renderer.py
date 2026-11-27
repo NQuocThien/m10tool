@@ -5,32 +5,25 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from .config import (
     FFMPEG_PATH, DEFAULT_FPS, DEFAULT_MAX_ZOOM, DEFAULT_SUB_STYLE,
-    INTRO_EN_PATH, INTRO_VI_PATH, GLOBAL_INTRO_PATH,
-    BGM_VI_PATH, BGM_EN_PATH, GLOBAL_BGM_PATH, DEFAULT_BGM_VOLUME
+    INTRO_VI_PATH, GLOBAL_INTRO_PATH,
+    BGM_VI_PATH, GLOBAL_BGM_PATH, DEFAULT_BGM_VOLUME
 )
-
-def get_bgm_path(lang="vi"):
-    if lang == "vi" and os.path.exists(BGM_VI_PATH):
-        return BGM_VI_PATH
-    elif lang == "en" and os.path.exists(BGM_EN_PATH):
-        return BGM_EN_PATH
-    elif os.path.exists(GLOBAL_BGM_PATH):
-        return GLOBAL_BGM_PATH
-    return None
 from .motion_25d import prepare_25d_layers
 
-def get_intro_path(lang="vi"):
-    if lang == "vi" and os.path.exists(INTRO_VI_PATH):
-        return INTRO_VI_PATH
-    elif lang == "en" and os.path.exists(INTRO_EN_PATH):
-        return INTRO_EN_PATH
-    elif os.path.exists(INTRO_EN_PATH):
-        return INTRO_EN_PATH
-    elif os.path.exists(GLOBAL_INTRO_PATH):
-        return GLOBAL_INTRO_PATH
-    elif os.path.exists(INTRO_VI_PATH):
-        return INTRO_VI_PATH
+
+def _first_existing(*paths):
+    for p in paths:
+        if p and os.path.exists(p):
+            return p
     return None
+
+
+def get_bgm_path():
+    return _first_existing(BGM_VI_PATH, GLOBAL_BGM_PATH)
+
+
+def get_intro_path():
+    return _first_existing(INTRO_VI_PATH, GLOBAL_INTRO_PATH)
 
 def detect_target_resolution(sample_image_path):
     cmd = [FFMPEG_PATH, "-i", sample_image_path]
@@ -179,7 +172,6 @@ def render_long_thumbnail(
     headline_top,
     headline_bottom,
     badge_text=None,
-    lang="vi",
 ):
     """
     Generates a high-CTR 1920x1080 YouTube Long-form thumbnail with:
@@ -189,9 +181,8 @@ def render_long_thumbnail(
     from PIL import Image, ImageDraw, ImageFont
 
     W, H = 1920, 1080
-    is_en = (lang == "en")
     if badge_text is None:
-        badge_text = "SQUEEZING TECH" if is_en else "VẮT CHANH CÔNG NGHỆ"
+        badge_text = "VẮT CHANH CÔNG NGHỆ"
 
     temp_frame = None
     ext = os.path.splitext(hero_media_path)[1].lower()
@@ -225,7 +216,7 @@ def render_long_thumbnail(
         scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         sdraw = ImageDraw.Draw(scrim)
         scrim_End = int(W * 0.68)
-        base_rgb = (8, 13, 28) if is_en else (20, 17, 15)
+        base_rgb = (20, 17, 15)
         for x in range(scrim_End):
             ratio = 1.0 - (x / scrim_End)
             alpha = int(min(242, 248 * (ratio ** 1.35)))
@@ -239,8 +230,8 @@ def render_long_thumbnail(
                     return ImageFont.truetype(fp, sz)
             return ImageFont.load_default()
 
-        accent_primary = (118, 255, 3, 255) if is_en else (244, 196, 48, 255)    # Neon Lime / Lemon Yellow
-        accent_alert = (0, 229, 255, 255) if is_en else (211, 84, 0, 255)       # Cyan / Terracotta Red-Orange
+        accent_primary = (244, 196, 48, 255)    # Lemon Yellow
+        accent_alert = (211, 84, 0, 255)       # Terracotta Red-Orange
         white = (255, 255, 255, 255)
         dark_ink = (15, 18, 24, 255)
 
@@ -294,7 +285,7 @@ def render_long_thumbnail(
             py = min(H - ph - 80, y_cursor + 36)
             draw.rounded_rectangle((78, py + 8, 78 + pw, py + ph + 8), radius=26, fill=(0, 0, 0, 180))
             draw.rounded_rectangle((72, py, 72 + pw, py + ph), radius=26, fill=accent_alert, outline=white, width=4)
-            pill_fg = dark_ink if is_en else white
+            pill_fg = white
             draw.text((72 + 36, py + 24 - tb[1]), hb_txt, font=f_bot, fill=pill_fg)
 
         canvas.convert("RGB").save(output_jpg, "JPEG", quality=95)
@@ -307,7 +298,7 @@ def render_long_thumbnail(
                 pass
 
 
-def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=None, use_intro=False, lang="vi", intro_path=None, motion_25d=False):
+def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=None, use_intro=False, intro_path=None, motion_25d=False):
     if len(image_paths) != len(enriched_items):
         raise ValueError(
             f"Count mismatch: {len(image_paths)} media files vs {len(enriched_items)} audio/script lines. "
@@ -329,10 +320,10 @@ def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=N
         # 1. Check & prepare Intro if enabled
         intro_clip = None
         if intro_path is None:
-            intro_path = get_intro_path(lang=lang)
+            intro_path = get_intro_path()
 
         if use_intro and intro_path and os.path.exists(intro_path):
-            print(f"🎬 Chuẩn hóa Intro video [{lang.upper()}]: {os.path.basename(intro_path)}...", flush=True)
+            print(f"🎬 Chuẩn hóa Intro video: {os.path.basename(intro_path)}...", flush=True)
             intro_clip = prepare_intro_clip(intro_path, target_w, target_h, fps, temp_dir)
             if intro_clip:
                 print("  [OK] Đã chuẩn hóa Intro khớp độ phân giải và audio.", flush=True)
@@ -417,14 +408,14 @@ def render_project(image_paths, enriched_items, srt_path, output_mp4, temp_dir=N
         srt_escaped = srt_path.replace("\\", "/").replace(":", "\\:")
         vf_sub = f"subtitles='{srt_escaped}':force_style='{sub_style}'"
 
-        bgm_path = get_bgm_path(lang=lang)
+        bgm_path = get_bgm_path()
         if bgm_path:
             print(f"🎵 Mixing background music ({os.path.basename(bgm_path)}, vol={DEFAULT_BGM_VOLUME})...", flush=True)
             total_content_dur = enriched_items[-1]["end"] if enriched_items else 60.0
             fade_start = max(0.0, total_content_dur - 1.5)
             af_mix = (
                 f"[1:a]volume={DEFAULT_BGM_VOLUME},afade=t=out:st={fade_start:.2f}:d=1.5[bgm];"
-                f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2[aout]"
+                f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=2:normalize=0[aout]"
             )
             cmd_sub = [
                 FFMPEG_PATH, "-y",
